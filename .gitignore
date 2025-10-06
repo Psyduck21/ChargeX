@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pkl
+*.env
+*.env.*
+*.sqlite3
+*.db
+venv/
+myenv/
+env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+dist/
+build/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Node/Frontend (if you have a JS frontend)
+node_modules/
+npm-debug.log
+yarn-error.log
+dist/
+build/
+
+# Supabase
+supabase/.temp/
+supabase/migrations/*.sql  # optional if you want to ignore auto-generated migrations
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Secrets & Keys
+*.key
+*.pem
+
+# Mac/Linux swap files
+*.swp
+*.swo
+
