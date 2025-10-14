@@ -25,8 +25,8 @@ app = FastAPI(
 # Allow CORS for frontend access
 origins = [
     "http://localhost",
-    "http://localhost:3000",  # Frontend URL
-    "http://127.0.0.1:3000"
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
@@ -58,4 +58,4 @@ def startup_event():
 
 @app.get("/")
 def root():
-    return {"message": "SmartEV Backend API is running 🚀", "login": "/auth/login-page"}
+    return {"message": "SmartEV Backend API is running 🚀"}
