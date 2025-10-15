@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
-export default function ProfessionalLogin({ onSwitchToSignup }) {
+export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,13 +26,13 @@ export default function ProfessionalLogin({ onSwitchToSignup }) {
         }
         console.log(data);
       // Save token for authenticated requests
-      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('access_token', data.access_token);
       if (rememberMe) {
         localStorage.setItem('remember_me', '1');
       } else {
         localStorage.removeItem('remember_me');
       }
-      // TODO: navigate to dashboard when routing is added
+      if (typeof onLoggedIn === 'function') onLoggedIn();
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {

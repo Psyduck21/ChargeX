@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, status, Request
-from ..dependencies import get_supabase_client
+from fastapi import APIRouter, HTTPException, status, Request, Depends
+from ..dependencies import get_supabase_client, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -12,13 +12,13 @@ async def signup(request: Request):
     if not email or not password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email and password required")
 
-    metadata = {
+    # metadata = {
 
-        "name": body.get("name"),
-        "phone": body.get("phone"),
-        "address": body.get("address"),
-        "city": body.get("city")
-    }
+    #     "name": body.get("name"),
+    #     "phone": body.get("phone"),
+    #     "address": body.get("address"),
+    #     "city": body.get("city")
+    # }
     supabase = get_supabase_client()
 
     # 1. Create user in Supabase Auth
@@ -101,3 +101,9 @@ async def login(request: Request):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Login failed: {e}")
+
+
+@router.get("/me")
+def me(current_user: dict = Depends(get_current_user)):
+    """Return normalized current user with role and station_ids."""
+    return current_user

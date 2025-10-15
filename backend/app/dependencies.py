@@ -12,10 +12,13 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SECRET_KEY = os.getenv("SERVICE_ROLE")
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise Exception("Supabase URL or Key not set in .env")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase_service_role: Client = create_client(SUPABASE_URL,SECRET_KEY)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
@@ -25,68 +28,66 @@ def get_supabase_client() -> Client:
     """
     return supabase
 
-
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     """
-    Get current authenticated user from Supabase token and determine role from separate tables
+    Get current authenticated user from Supabase token and determine role from role tables.
+    Role hierarchy: admin > station_manager > app_user
     """
     try:
-        user_response = supabase.auth.get_user(token)
-        if user_response.user is None:
+        # Get user info from Supabase token
+        user_response = supabase_service_role.auth.get_user(token)
+        # print(user_response)
+        print(user_response.user)
+        user_obj = user_response.user
+        if not user_obj or not getattr(user_obj, "id", None):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        user_obj = user_response.user
-        user_id = getattr(user_obj, "id", None)
-        
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid user ID",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        # Check which table the user exists in to determine role
-        role = "app_user"  # default
+        user_id = user_obj.id
+        print(user_id)
+        # print(type(user_id))
+        # Initialize defaults
+        role = "app_user"
         station_ids = []
-        
-        # Check if user is admin
-        admin_response = supabase.table("admins").select("*").eq("id", str(user_id)).execute()
+
+        # Check if user exists in admins table
+        admin_response = supabase_service_role.table("admins").select("id").eq("id", user_id).execute()
+        # print(admin_response)
         if admin_response.data:
             role = "admin"
+        # # Temporary: Allow admin access for specific email
+        # elif user_obj.email == "admin@smartevev.com":
+        #     role = "admin"
         else:
-            # Check if user is station manager
-            manager_response = supabase.table("station_managers").select("*").eq("user_id", str(user_id)).execute()
+            # Check if user exists in station_managers table
+            manager_response = supabase.table("station_managers").select("*").eq("id", user_id).execute()
             if manager_response.data:
                 role = "station_manager"
-                # Get station_ids from station_managers table
-                station_ids = [manager.get("station_id") for manager in manager_response.data if manager.get("station_id")]
+                station_ids = [m.get("station_id") for m in manager_response.data if m.get("station_id")]
             else:
-                # Check if user is regular app user (profiles table)
-                profile_response = supabase.table("profiles").select("*").eq("id", str(user_id)).execute()
+                # Check if user exists in profiles table
+                profile_response = supabase.table("profiles").select("id").eq("id", user_id).execute()
                 if not profile_response.data:
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail="User not found in any role table",
                         headers={"WWW-Authenticate": "Bearer"},
                     )
-        
-        # Normalize shape expected by routers
-        normalized = {
+
+        return {
             "id": user_id,
             "role": role,
-            "station_ids": station_ids,
+            "station_ids": station_ids
         }
-        return normalized
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate user: {e}",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
 
 def get_current_active_user(current_user: dict = Depends(get_current_user)) -> dict:
     """
@@ -104,7 +105,7 @@ def require_admin(current_user: dict = Depends(get_current_active_user)) -> dict
     """
     Require user to be admin
     """
-    role = current_user.get("user_metadata", {}).get("role", "")
+    role = current_user.get("role", "")
     if role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -114,10 +115,8 @@ def require_admin(current_user: dict = Depends(get_current_active_user)) -> dict
 
 
 def require_station_manager(current_user: dict = Depends(get_current_active_user)) -> dict:
-    """
-    Require user to be station manager
-    """
-    role = current_user.get("user_metadata", {}).get("role", "")
+    """Require user to be station manager based on normalized role."""
+    role = current_user.get("role", "")
     if role != "station_manager":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -127,10 +126,8 @@ def require_station_manager(current_user: dict = Depends(get_current_active_user
 
 
 def require_app_user(current_user: dict = Depends(get_current_active_user)) -> dict:
-    """
-    Require user to be regular app user
-    """
-    role = current_user.get("user_metadata", {}).get("role", "")
+    """Require user to be regular app user based on normalized role."""
+    role = current_user.get("role", "")
     if role != "app_user":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
