@@ -4,12 +4,13 @@ from uuid import UUID
 
 from ..dependencies import get_current_user
 from ..crud import list_slots, create_slot
+from ..models import SlotCreate, SlotOut
 
 router = APIRouter(prefix="/slots", tags=["Slots"])
 
 
-@router.get("/", response_model=List[dict])
-def get_slots(current_user: Any = Depends(get_current_user)):
+@router.get("/", response_model=List[SlotOut])
+async def get_slots(current_user: Any = Depends(get_current_user)):
     """
     List all slots visible to the current user.
     - Admin: can see all slots
@@ -32,11 +33,11 @@ def get_slots(current_user: Any = Depends(get_current_user)):
         if isinstance(current_user, dict)
         else getattr(current_user, "station_ids", [])
     )
-    return list_slots(station_ids)
+    return await list_slots(station_ids)
 
 
-@router.post("/", response_model=dict)
-def add_slot(slot: dict, current_user: Any = Depends(get_current_user)):
+@router.post("/", response_model=SlotOut)
+async def add_slot(slot: SlotCreate, current_user: Any = Depends(get_current_user)):
     """
     Create a new slot for a charging station.
     Only station managers can create slots.
@@ -57,10 +58,11 @@ def add_slot(slot: dict, current_user: Any = Depends(get_current_user)):
         if isinstance(current_user, dict)
         else getattr(current_user, "station_ids", [])
     )
-    if slot.get("station_id") not in station_ids:
+    if slot.station_id not in station_ids:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot create slot for stations you do not manage"
         )
 
-    return create_slot(slot)
+    created = await create_slot(slot)
+    return created

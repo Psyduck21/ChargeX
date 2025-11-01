@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import apiService from '../services/api.js';
 
 export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
   const [email, setEmail] = useState('');
@@ -15,24 +16,28 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
     setError('');
     setLoading(true);
     try {
-      const response = await fetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-          throw new Error(data?.detail || 'Login failed');
+      const data = await apiService.login(email, password);
+      console.log('Login response:', data);
+      
+      // Save tokens for authenticated requests
+      if (data?.access_token) {
+        localStorage.setItem('access_token', data.access_token);
+        localStorage.setItem('refresh_token', data.refresh_token);
+        
+        // Store expiry time if provided
+        if (data.expires_in) {
+          const expiryTime = Date.now() + (data.expires_in * 1000);
+          localStorage.setItem('token_expiry', expiryTime.toString());
         }
-        console.log(data);
-      // Save token for authenticated requests
-      localStorage.setItem('access_token', data.access_token);
+      }
+      
       if (rememberMe) {
         localStorage.setItem('remember_me', '1');
       } else {
         localStorage.removeItem('remember_me');
       }
-      if (typeof onLoggedIn === 'function') onLoggedIn();
+      
+      if (typeof onLoggedIn === 'function') onLoggedIn(data);
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {
@@ -41,17 +46,17 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-6">
         {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-card rounded-2xl shadow-xl p-8 border border-border/50 dark:border-secondary/50">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-xl mb-4">
               <Lock className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-            <p className="text-gray-600">Please sign in to your account</p>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Welcome Back</h1>
+            <p className="text-secondary-foreground dark:text-secondary">Please sign in to your account</p>
           </div>
 
           {/* Form */}
@@ -63,12 +68,12 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
             )}
             {/* Email Input */}
             <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-2">
                 Email Address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+                  <Mail className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
                   id="email"
@@ -76,7 +81,7 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email"
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                  className="w-full pl-12 pr-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-foreground placeholder:text-muted-foreground bg-background"
                   required
                 />
               </div>
@@ -84,12 +89,12 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
 
             {/* Password Input */}
             <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-semibold text-foreground mb-2">
                 Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+                  <Lock className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
                   id="password"
@@ -97,13 +102,13 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                  className="w-full pl-12 pr-12 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-foreground placeholder:text-muted-foreground bg-background"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5" />
@@ -121,11 +126,11 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  className="w-4 h-4 text-primary border-border rounded focus:ring-2 focus:ring-primary cursor-pointer"
                 />
-                <span className="ml-2 text-sm text-gray-700">Remember me</span>
+                <span className="ml-2 text-sm text-foreground">Remember me</span>
               </label>
-              <a href="#" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+              <a href="#" className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
                 Forgot Password?
               </a>
             </div>
@@ -134,7 +139,7 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+              className="w-full bg-primary disabled:bg-muted disabled:cursor-not-allowed text-primary-foreground disabled:text-muted-foreground font-semibold py-3 px-4 rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
             >
               {loading ? 'Signing in...' : 'Sign In'}
               <ArrowRight className="w-5 h-5" />
@@ -144,10 +149,10 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
+              <div className="w-full border-t border-border"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">Or continue with</span>
+              <span className="px-4 bg-card text-muted-foreground">Or continue with</span>
             </div>
           </div>
 
@@ -155,7 +160,7 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
           <div className="grid grid-cols-3 gap-3">
             <button
               type="button"
-              className="flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-center py-3 px-4 border border-border rounded-lg hover:bg-secondary transition-colors"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -166,7 +171,7 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
             </button>
             <button
               type="button"
-              className="flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-center py-3 px-4 border border-border rounded-lg hover:bg-secondary transition-colors"
             >
               <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
@@ -174,7 +179,7 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
             </button>
             <button
               type="button"
-              className="flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-center py-3 px-4 border border-border rounded-lg hover:bg-secondary transition-colors"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
@@ -183,20 +188,20 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
           </div>
 
           {/* Sign Up Link */}
-          <p className="text-center text-sm text-gray-600 mt-6">
+          <p className="text-center text-sm text-secondary-foreground mt-6">
             Don't have an account?{' '}
-            <button type="button" onClick={onSwitchToSignup} className="font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+            <button type="button" onClick={onSwitchToSignup} className="font-semibold text-primary hover:text-primary/80 transition-colors">
               Sign up for free
             </button>
           </p>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-gray-500 mt-6">
+        <p className="text-center text-xs text-muted-foreground mt-6">
           By signing in, you agree to our{' '}
-          <a href="#" className="text-gray-700 hover:underline">Terms of Service</a>
+          <a href="#" className="text-foreground hover:underline">Terms of Service</a>
           {' '}and{' '}
-          <a href="#" className="text-gray-700 hover:underline">Privacy Policy</a>
+          <a href="#" className="text-foreground hover:underline">Privacy Policy</a>
         </p>
       </div>
     </div>

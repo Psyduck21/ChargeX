@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, User, Phone, MapPin, Home, ArrowRight } from 'lucide-react';
+import apiService from '../services/api.js';
 
 export default function EnhancedSignup({ onSwitchToLogin }) {
   const [formData, setFormData] = useState({
@@ -39,27 +40,19 @@ export default function EnhancedSignup({ onSwitchToLogin }) {
 
     setLoading(true);
     try {
-      const response = await fetch('/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          name: formData.name,
-          phone: formData.phone,
-          address: formData.address,
-          city: formData.city
-        })
+      const data = await apiService.signup({
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.detail || 'Signup failed');
-      }
       console.log(data)
       if (data?.token_type === 'email_confirmation_required') {
         setSuccess('Account created! Please check your email to confirm your account.');
       } else if (data?.access_token) {
-        localStorage.setItem('token', data.access_token);
+        localStorage.setItem('access_token', data.access_token);
         setSuccess('Account created! You are now signed in.');
       } else {
         setSuccess('Account created successfully.');

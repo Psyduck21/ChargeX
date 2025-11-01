@@ -1,64 +1,87 @@
-import { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { ThemeProvider } from './contexts/ThemeContext'
 import ProfessionalLogin from './components/login.jsx'
 import ProfessionalSignup from './components/signup.jsx'
-import AdminDashboard from './components/AdminDashboard.jsx'
+// import ManagerOperations from './components/ManagerOperations.jsx'
+import StationManagerDashboard from './components/ManagerDashboard.jsx'
+import UserOperations from './components/UserOperations.jsx'
+import AdminDashboard from './components/Admindashboard.jsx'
+import apiService from './services/api.js'
 
-function RoleGate({ role }) {
-  if (role === 'admin') return <AdminDashboard />
-  if (role === 'station_manager') return <div className="p-6">Manager Dashboard (coming soon)</div>
-  if (role === 'app_user') return <div className="p-6">User Dashboard (coming soon)</div>
-  return <div className="p-6">Unauthorized</div>
-}
-
-function App() {
+function AppContent() {
   const [view, setView] = useState('login')
   const [role, setRole] = useState('')
-
+  
+  // Check for existing session on mount
   useEffect(() => {
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token') || ''
-    // console.log(token)
-    if (!token) return
-    ;(async () => {
-      try {
-        const res = await fetch('/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        console.log(res)
-        if (!res.ok) throw new Error('Failed to fetch me')
-        const me = await res.json()
-        if (me?.role) {
-          setRole(me.role)
-          setView('dashboard')
-        }
-      } catch {}
-    })()
-  }, [])
+    const token = localStorage.getItem('access_token');
+    const storedRole = localStorage.getItem('user_role');
+    
+    if (token && storedRole) {
+      setRole(storedRole);
+      setView('dashboard');
+    }
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await apiService.logout();
+      setRole('');
+      setView('login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background font-sans">
       {view === 'login' && (
         <ProfessionalLogin
           onSwitchToSignup={() => setView('signup')}
-          onLoggedIn={async () => {
-            const token = localStorage.getItem('access_token') || localStorage.getItem('token') || ''
+          onLoggedIn={async (data) => {
             try {
-              const res = await fetch('/auth/me', {
-                headers: { Authorization: `Bearer ${token}` },
-              })
-              if (!res.ok) throw new Error('Failed to fetch me')
-              const me = await res.json()
-              setRole(me?.role || '')
-              setView('dashboard')
-            } catch (e) {
-              console.error(e)
+              // Login is already handled in the login component
+              const userRole = data?.user?.role || 'app_user';
+              setRole(userRole);
+              setView('dashboard');
+            } catch (error) {
+              console.error('Login failed:', error);
+              // Let the Login component handle the error display
+              throw error;
             }
           }}
         />
       )}
-      {view === 'signup' && <ProfessionalSignup onSwitchToLogin={() => setView('login')} />}
-      {view === 'dashboard' && <RoleGate role={role} />}
+      {view === 'signup' && (
+        <ProfessionalSignup 
+          onSwitchToLogin={() => setView('login')}
+          onSignup={async (userData) => {
+            try {
+              await apiService.signup(userData);
+              setView('login');
+            } catch (error) {
+              console.error('Signup failed:', error);
+              // Let the Signup component handle the error display
+              throw error;
+            }
+          }}
+        />
+      )}
+      {view === 'dashboard' && (
+        <div className="p-4">
+          {role === 'admin' && <AdminDashboard onLogout={handleLogout} />}
+          {role === 'station_manager' && <StationManagerDashboard onLogout={handleLogout} />}
+          {role === 'app_user' && <UserOperations onLogout={handleLogout} />}
+        </div>
+      )}
     </div>
   )
 }
 
-export default App;
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  )
+}

@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Dict, Any
 
 from ..dependencies import get_current_user, require_admin
-from ..crud import list_charging_sessions, create_charging_session, list_charging_sessions_between
+from ..crud import list_charging_sessions, create_charging_session, list_charging_sessions_between, list_stations
+from ..models import ChargingSessionCreate, ChargingSessionOut
 
 router = APIRouter(
     prefix="/charging_sessions",
@@ -10,8 +11,8 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=List[Dict[str, Any]])
-def get_sessions(current_user=Depends(get_current_user)):
+@router.get("/", response_model=List[ChargingSessionOut])
+async def get_sessions(current_user=Depends(get_current_user)):
     """
     List charging sessions accessible to the current user.
     Station managers/admins can view their stations' sessions.
@@ -23,11 +24,12 @@ def get_sessions(current_user=Depends(get_current_user)):
         else getattr(current_user, "station_ids", [])
     )
 
-    return list_charging_sessions(station_ids)
+    # list_charging_sessions is async - await the result
+    return await list_charging_sessions(station_ids)
 
 
-@router.post("/", response_model=Dict[str, Any])
-def add_session(session: Dict[str, Any], current_user=Depends(get_current_user)):
+@router.post("/", response_model=ChargingSessionOut)
+async def add_session(session: ChargingSessionCreate, current_user=Depends(get_current_user)):
     """
     Add a new charging session.
     Only station managers and admins can create sessions.
@@ -45,15 +47,19 @@ def add_session(session: Dict[str, Any], current_user=Depends(get_current_user))
             detail="You are not authorized to create a charging session."
         )
 
-    return create_charging_session(session)
+    # create_charging_session is async - await it
+    created = await create_charging_session(session.dict() if hasattr(session, 'dict') else session)
+    if not created:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create charging session")
+    return created
 
 
 @router.get("/analytics/consumption", response_model=List[Dict[str, Any]], dependencies=[Depends(require_admin)])
-def consumption_analytics(start: str, end: str):
+async def consumption_analytics(start: str, end: str):
     """Return charging sessions between ISO dates; frontend aggregates kWh by day/station."""
     # Admin has access to all stations; pass empty list to signal "all" here and let CRUD handle
     # We don't have a list-all variant, so call between with all by fetching station ids from stations table via list_stations
-    from ..crud import list_stations
-    stations = list_stations()
-    station_ids = [s.get("station_id") or s.get("id") for s in stations if s.get("station_id") or s.get("id")]
-    return list_charging_sessions_between(station_ids, start, end)
+    stations = await list_stations()
+    station_ids = [s.get("station_id") or s.get("id") for s in stations if (s.get("station_id") or s.get("id"))]
+    # await the between listing as it's async
+    return await list_charging_sessions_between(station_ids, start, end)

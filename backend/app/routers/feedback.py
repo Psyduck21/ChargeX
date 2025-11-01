@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 
 from ..dependencies import get_current_user
 from ..crud import list_feedback, create_feedback
+from ..models import FeedbackCreate, FeedbackOut
 
 router = APIRouter(
     prefix="/feedback",
@@ -10,8 +11,8 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=List[Dict[str, Any]])
-def get_feedback_items(current_user=Depends(get_current_user)):
+@router.get("/", response_model=List[FeedbackOut])
+async def get_feedback_items(current_user=Depends(get_current_user)):
     """
     Retrieve feedback items.
     Only station managers and admins can list feedback.
@@ -36,11 +37,11 @@ def get_feedback_items(current_user=Depends(get_current_user)):
         else getattr(current_user, "station_ids", [])
     )
 
-    return list_feedback(station_ids)
+    return await list_feedback(station_ids)
 
 
-@router.post("/", response_model=Dict[str, Any])
-def add_feedback(feedback: Dict[str, Any], current_user=Depends(get_current_user)):
+@router.post("/", response_model=FeedbackOut)
+async def add_feedback(feedback: FeedbackCreate, current_user=Depends(get_current_user)):
     """
     Submit feedback as an authenticated user.
     """
@@ -58,6 +59,7 @@ def add_feedback(feedback: Dict[str, Any], current_user=Depends(get_current_user
         )
 
     # Attach the user ID to the feedback
-    feedback["user_id"] = user_id
-
-    return create_feedback(feedback)
+    payload = feedback.dict()
+    payload["user_id"] = str(user_id)
+    created = await create_feedback(FeedbackCreate(**payload))
+    return created
