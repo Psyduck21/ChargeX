@@ -26,7 +26,8 @@ from ..crud import (
     calculate_co2_saved,
     get_recent_activity,
     get_station,
-    get_station_manager
+    get_station_manager,
+    get_manager_stations
 )
 from ..crud.profiles import get_user_profile
 from ..utils.logger import log_activity
@@ -40,9 +41,16 @@ router = APIRouter(prefix="/stations", tags=["Stations"])
 # ------------------------
 
 @router.get("/", response_model=List[StationOut], dependencies=[Depends(get_current_user)])
-async def read_stations():
-    """List all stations. Admin/Managers will filter on client as needed."""
-    return await list_stations()
+async def read_stations(current_user: dict = Depends(get_current_user)):
+    """List all stations. Admin sees all, managers see only their assigned stations."""
+    if current_user.get("role") == "admin":
+        # Admin sees all stations
+        return await list_stations()
+    elif current_user.get("role") == "station_manager":
+        # Manager sees only stations assigned to them
+        return await get_manager_stations(current_user["id"])
+    else:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
 
 @router.post("/", response_model=StationOut, dependencies=[Depends(require_admin)])
@@ -69,9 +77,23 @@ async def add_station(station: StationCreate, current_user: dict = Depends(get_c
     return created
 
 
-@router.put("/{station_id}", response_model=StationOut, dependencies=[Depends(require_admin)])
+@router.put("/{station_id}", response_model=StationOut, dependencies=[Depends(get_current_user)])
 async def edit_station(station_id: UUID, update: StationUpdate, current_user: dict = Depends(get_current_user)):
-    """Update an existing station"""
+    """Update an existing station. Admin can update any station, managers can only update their assigned stations."""
+    # Check permissions
+    if current_user.get("role") == "admin":
+        # Admin can update any station
+        pass
+    elif current_user.get("role") == "station_manager":
+        # Manager can only update stations assigned to them
+        current_station = await get_station(station_id)
+        if not current_station:
+            raise HTTPException(status_code=404, detail="Station not found")
+        if str(current_station.get("station_manager")) != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Can only update stations assigned to you")
+    else:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     update_dict = update.dict(exclude_unset=True)
 
     current_station = await get_station(station_id)

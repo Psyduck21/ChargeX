@@ -63,6 +63,34 @@ async def add_station_manager(manager: Dict[str, Any], current_user: dict = Depe
     return insert_response
 
 
+# ------------------------
+# ✅ Station Manager Dashboard Endpoints
+# ------------------------
+
+@router.get("/my-stations", dependencies=[Depends(require_station_manager)])
+async def get_my_stations(current_user: dict = Depends(get_current_user)) -> List[Dict[str, Any]]:
+    """Get all stations managed by the current station manager"""
+    print(f"[router] get_my_stations called for user {current_user.get('id')} with role {current_user.get('role')}")
+    return await get_manager_stations(current_user["id"])
+
+
+@router.get("/my-bookings", dependencies=[Depends(require_station_manager)])
+async def get_my_bookings(current_user: dict = Depends(get_current_user)) -> List[Dict[str, Any]]:
+    """Get all bookings for stations managed by the current station manager"""
+    print(f"[router] get_my_bookings called for user {current_user.get('id')} with role {current_user.get('role')}")
+    return await get_manager_bookings(current_user["id"])
+
+
+@router.get("/my-sessions", dependencies=[Depends(require_station_manager)])
+async def get_my_sessions(current_user: dict = Depends(get_current_user)) -> List[Dict[str, Any]]:
+    """Get all charging sessions for stations managed by the current station manager"""
+    return await get_manager_sessions(current_user["id"])
+
+
+# ------------------------
+# Admin Routes (must come after specific routes to avoid conflicts)
+# ------------------------
+
 @router.get("/{manager_id}", dependencies=[Depends(require_admin)])
 async def get_manager(manager_id: UUID) -> Dict[str, Any]:
     """Get a specific station manager by ID"""
@@ -72,7 +100,7 @@ async def get_manager(manager_id: UUID) -> Dict[str, Any]:
     return manager
 
 
-@router.put("/{manager_id}", dependencies=[Depends(require_admin)])
+@router.put("/{manager_id}", dependencies=[Depends(get_current_user)])
 async def update_manager(manager_id: UUID, update_data: Dict[str, Any], current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """Update a station manager"""
     # Get current manager info for logging
@@ -128,25 +156,3 @@ async def delete_manager(manager_id: UUID, current_user: dict = Depends(get_curr
     )
 
     return {"message": "Station manager deleted successfully"}
-
-
-# ------------------------
-# ✅ Station Manager Dashboard Endpoints
-# ------------------------
-
-@router.get("/my-stations", dependencies=[Depends(require_station_manager)])
-async def get_my_stations(current_user: dict = Depends(get_current_user)) -> List[Dict[str, Any]]:
-    """Get all stations managed by the current station manager"""
-    return await get_manager_stations(current_user["id"])
-
-
-@router.get("/my-bookings", dependencies=[Depends(require_station_manager)])
-async def get_my_bookings(current_user: dict = Depends(get_current_user)) -> List[Dict[str, Any]]:
-    """Get all bookings for stations managed by the current station manager"""
-    return await get_manager_bookings(current_user["id"])
-
-
-@router.get("/my-sessions", dependencies=[Depends(require_station_manager)])
-async def get_my_sessions(current_user: dict = Depends(get_current_user)) -> List[Dict[str, Any]]:
-    """Get all charging sessions for stations managed by the current station manager"""
-    return await get_manager_sessions(current_user["id"])

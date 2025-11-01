@@ -8,6 +8,8 @@ import ReportsTab from './admindashboard/ReportsTab';
 import Modal from './admindashboard/Modal';
 import ProfileModal from './admindashboard/ProfileModal';
 import ConfirmDialog from './ui/ConfirmDialog';
+import Tooltip from './manager/Tooltip';
+import Breadcrumb from './manager/Breadcrumb';
 import { Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -40,6 +42,10 @@ export default function AdminDashboard({ onLogout }) {
     onConfirm: () => {},
     loading: false
   });
+
+  const [breadcrumbs, setBreadcrumbs] = useState([
+    { name: 'Dashboard', path: 'overview' }
+  ]);
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444'];
 
@@ -285,6 +291,20 @@ export default function AdminDashboard({ onLogout }) {
     fetchAnalyticsData(); // Fetch analytics immediately when component loads
   }, []);
 
+  useEffect(() => {
+    const tabNames = {
+      overview: 'Overview',
+      stations: 'Stations',
+      managers: 'Managers',
+      users: 'Users',
+      reports: 'Reports'
+    };
+    setBreadcrumbs([
+      { name: 'Dashboard', path: 'overview' },
+      { name: tabNames[activeTab], path: activeTab }
+    ]);
+  }, [activeTab]);
+
   const openModal = (type, mode, item = null) => {
     setModalType(type);
     setModalMode(mode);
@@ -429,6 +449,7 @@ export default function AdminDashboard({ onLogout }) {
       {/* Main Content */}
       <main className="ml-64 p-8">
         <header className="mb-8">
+          <Breadcrumb breadcrumbs={breadcrumbs} onNavigate={setActiveTab} darkMode={false} />
           <div className="flex items-center justify-between mb-2">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-1">
@@ -437,14 +458,16 @@ export default function AdminDashboard({ onLogout }) {
               <p className="text-gray-500">Manage and monitor your EV charging infrastructure</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  className="w-64 pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              </div>
+              <Tooltip text="Search across stations, managers, and users">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    className="w-64 pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                </div>
+              </Tooltip>
             </div>
           </div>
         </header>

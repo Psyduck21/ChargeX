@@ -5,10 +5,13 @@ import ManagerSidebar from './manager/ManagerSidebar';
 import Breadcrumb from './manager/Breadcrumb';
 import Tooltip from './manager/Tooltip';
 import BookingAlert from './manager/BookingAlert';
-import ManagerProfileModal from './ManagerProfileModal';
+
 import OverviewTab from './manager/OverviewTab';
 import BookingsTab from './manager/BookingsTab';
 import SlotsTab from './manager/SlotsTab';
+import StationsAnalyticsTab from './manager/StationsAnalyticsTab';
+import ProfileTab from './manager/ProfileTab';
+import ChangePasswordModal from './manager/ChangePasswordModal';
 import apiService from '../services/api';
 
 export default function StationManagerDashboard({onLogout}) {
@@ -17,64 +20,89 @@ export default function StationManagerDashboard({onLogout}) {
   const [stations, setStations] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showBookingAlert, setShowBookingAlert] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [newBooking, setNewBooking] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [viewMode, setViewMode] = useState('grid');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
 
-  const [managerProfile, setManagerProfile] = useState({
-    full_name: 'John Doe',
-    email: 'john.doe@evcharge.com',
-    role: 'Station Manager',
-    phone: '+91 98765 43210',
-    joined: 'March 2024',
-    stations_managed: 2
-  });
+  const [managerProfile, setManagerProfile] = useState(null);
+  const [revenueData, setRevenueData] = useState([]);
+  const [energyData, setEnergyData] = useState([]);
+  const [chargerTypeData, setChargerTypeData] = useState([]);
+  const [slotStatusData, setSlotStatusData] = useState([]);
 
   const [breadcrumbs, setBreadcrumbs] = useState([
     { name: 'Dashboard', path: 'overview' }
   ]);
 
-  const revenueData = [
-    { day: 'Mon', revenue: 3200 },
-    { day: 'Tue', revenue: 3800 },
-    { day: 'Wed', revenue: 3200 },
-    { day: 'Thu', revenue: 4500 },
-    { day: 'Fri', revenue: 5200 },
-    { day: 'Sat', revenue: 6100 },
-    { day: 'Sun', revenue: 5800 },
-  ];
+  const fetchAnalyticsData = async () => {
+    try {
+      const [energyTrend, revenueTrend, chargerTypes] = await Promise.all([
+        apiService.getEnergyConsumptionAnalytics(7),
+        apiService.getRevenueAnalytics(7),
+        apiService.getChargingTypeAnalytics(30)
+      ]);
 
-  const energyData = [
-    { day: 'Mon', energy: 240 },
-    { day: 'Tue', energy: 380 },
-    { day: 'Wed', energy: 320 },
-    { day: 'Thu', energy: 450 },
-    { day: 'Fri', energy: 520 },
-    { day: 'Sat', energy: 610 },
-    { day: 'Sun', energy: 580 },
-  ];
+      // Process energy data
+      const energyArr = (energyTrend || []).map(item => ({
+        ...item,
+        day: new Date(item.date).toLocaleDateString(undefined, { weekday: 'short' }),
+        energy: item.energy_kwh || 0
+      }));
+      setEnergyData(energyArr);
 
-  const slotStatusData = [
-    { name: 'Available', value: 19, color: '#10b981' },
-    { name: 'Occupied', value: 6, color: '#f59e0b' },
-  ];
+      // Process revenue data
+      const revenueArr = (revenueTrend || []).map(item => ({
+        ...item,
+        day: new Date(item.date).toLocaleDateString(undefined, { weekday: 'short' }),
+        revenue: item.revenue || 0
+      }));
+      setRevenueData(revenueArr);
+
+      // Process charger type data with colors
+      const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444'];
+      const chargerWithColors = (chargerTypes || []).map((c, i) => ({
+        ...c,
+        color: COLORS[i % COLORS.length]
+      }));
+      setChargerTypeData(chargerWithColors);
+
+      // Set slot status data based on stations
+      const totalSlots = stations.reduce((sum, s) => sum + (s.capacity || 0), 0);
+      const availableSlots = stations.reduce((sum, s) => sum + (s.available_slots || 0), 0);
+      const occupiedSlots = totalSlots - availableSlots;
+
+      setSlotStatusData([
+        { name: 'Available', value: availableSlots, color: '#10b981' },
+        { name: 'Occupied', value: occupiedSlots, color: '#f59e0b' },
+      ]);
+
+    } catch (error) {
+      console.error('Error fetching analytics data:', error);
+      // Set fallback data
+      setEnergyData([]);
+      setRevenueData([]);
+      setChargerTypeData([]);
+      setSlotStatusData([
+        { name: 'Available', value: 0, color: '#10b981' },
+        { name: 'Occupied', value: 0, color: '#f59e0b' },
+      ]);
+    }
+  };
 
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [s, b] = await Promise.all([
+      const [s, b, p] = await Promise.all([
         apiService.getManagerStations(),
-        apiService.getStationBookings()
+        apiService.getManagerBookings(),
+        apiService.getMyProfile().catch(() => null) // Fallback if profile fetch fails
       ]);
       setStations(s || []);
       setBookings(b || []);
+      if (p) setManagerProfile(p);
+      console.log('Fetched stations:', s);
     } catch (err) {
       console.error(err);
     } finally {
@@ -100,12 +128,28 @@ export default function StationManagerDashboard({onLogout}) {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch analytics data after stations are loaded
+  useEffect(() => {
+    if (stations.length > 0) {
+      fetchAnalyticsData();
+    }
+  }, [stations]);
+
+  // Set up analytics updates every 5 minutes
+  useEffect(() => {
+    if (stations.length > 0) {
+      const analyticsInterval = setInterval(fetchAnalyticsData, 300000); // 5 minutes
+      return () => clearInterval(analyticsInterval);
+    }
+  }, [stations]);
+
   useEffect(() => {
     const tabNames = {
       overview: 'Dashboard',
       bookings: 'Bookings',
       slots: 'Slot Management',
-      stations: 'My Stations'
+      stations: 'My Stations',
+      profile: 'Profile'
     };
     setBreadcrumbs([
       { name: 'Dashboard', path: 'overview' },
@@ -123,21 +167,6 @@ export default function StationManagerDashboard({onLogout}) {
   const handleRejectBooking = () => {
     setShowBookingAlert(false);
   };
-
-  const filteredBookings = bookings.filter(booking => {
-    const matchesSearch = booking.user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          booking.user_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          booking.station.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || booking.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
-
-  const paginatedBookings = filteredBookings.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
 
 
 
@@ -171,9 +200,18 @@ export default function StationManagerDashboard({onLogout}) {
               <h1 className={`text-2xl md:text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-1`}>
                 {activeTab === 'overview' ? 'Dashboard Overview' :
                  activeTab === 'bookings' ? 'Bookings Management' :
-                 activeTab === 'slots' ? 'Slot Management' : 'My Stations'}
+                 activeTab === 'slots' ? 'Slot Management' :
+                 activeTab === 'stations' ? 'My Stations' :
+                 activeTab === 'profile' ? 'My Profile' : 'Dashboard'}
               </h1>
-              <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Welcome back, {managerProfile.full_name.split(' ')[0]}!</p>
+              {
+                activeTab === 'overview' ? <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Overview of your stations and performance</p> :
+                activeTab === 'bookings' ? <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Manage station bookings and view details</p> :
+                activeTab === 'slots' ? <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Monitor and manage charging slots</p> :
+                activeTab === 'stations' ? <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>View and manage your charging stations</p> :
+                activeTab === 'profile' ? <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>View and edit your profile information</p> :
+                <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Welcome to your dashboard</p>
+              }
             </div>
             <div className="flex items-center gap-3">
               <Tooltip text="Toggle dark mode">
@@ -198,24 +236,24 @@ export default function StationManagerDashboard({onLogout}) {
                   className={`flex items-center gap-2 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} rounded-xl p-2 transition-colors`}
                 >
                   <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold cursor-pointer">
-                    {managerProfile.full_name[0]}
+                    {managerProfile?.name?.[0] || 'U'}
                   </div>
                   <div className="text-left hidden md:block">
-                    <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{managerProfile.full_name.split(' ')[0]}</p>
-                    <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{managerProfile.role}</p>
+                    <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{managerProfile?.name?.split(' ')[0] || 'User'}</p>
+                    <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{managerProfile?.role || 'Loading...'}</p>
                   </div>
                 </button>
 
                 {showProfileDropdown && (
                   <div className={`absolute right-0 mt-2 w-64 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-lg border py-2 z-50`}>
                     <div className={`px-4 py-3 border-b ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
-                      <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{managerProfile.full_name}</p>
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{managerProfile.email}</p>
+                      <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{managerProfile?.name || 'User'}</p>
+                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{managerProfile?.email || 'Loading...'}</p>
                     </div>
 
                     <button
                       onClick={() => {
-                        setShowProfileModal(true);
+                        setActiveTab('profile');
                         setShowProfileDropdown(false);
                       }}
                       className={`w-full px-4 py-2.5 text-left text-sm ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'} flex items-center gap-3`}
@@ -224,13 +262,25 @@ export default function StationManagerDashboard({onLogout}) {
                       My Profile
                     </button>
 
-                    <button className={`w-full px-4 py-2.5 text-left text-sm ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'} flex items-center gap-3`}>
+                    <button
+                      onClick={() => {
+                        setShowChangePasswordModal(true);
+                        setShowProfileDropdown(false);
+                      }}
+                      className={`w-full px-4 py-2.5 text-left text-sm ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'} flex items-center gap-3`}
+                    >
                       <Settings className="w-4 h-4" />
-                      Settings
+                      Change Password
                     </button>
 
                     <div className={`border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'} mt-2 pt-2`}>
-                      <button className={`w-full px-4 py-2.5 text-left text-sm text-red-600 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-red-50'} flex items-center gap-3`}>
+                      <button
+                        onClick={() => {
+                          setShowProfileDropdown(false);
+                          onLogout();
+                        }}
+                        className={`w-full px-4 py-2.5 text-left text-sm text-red-600 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-red-50'} flex items-center gap-3`}
+                      >
                         <LogOut className="w-4 h-4" />
                         Logout
                       </button>
@@ -251,6 +301,7 @@ export default function StationManagerDashboard({onLogout}) {
                 stations={stations}
                 revenueData={revenueData}
                 energyData={energyData}
+                chargerTypeData={chargerTypeData}
                 slotStatusData={slotStatusData}
                 darkMode={darkMode}
               />
@@ -269,12 +320,15 @@ export default function StationManagerDashboard({onLogout}) {
               />
             )}
             {activeTab === 'stations' && (
-              <OverviewTab
+              <StationsAnalyticsTab
                 stations={stations}
-                revenueData={revenueData}
-                energyData={energyData}
-                slotStatusData={slotStatusData}
                 darkMode={darkMode}
+              />
+            )}
+            {activeTab === 'profile' && (
+              <ProfileTab
+                darkMode={darkMode}
+                stations={stations}
               />
             )}
           </>
@@ -288,13 +342,14 @@ export default function StationManagerDashboard({onLogout}) {
         onReject={handleRejectBooking}
         darkMode={darkMode}
       />
-      <ManagerProfileModal
-        showProfileModal={showProfileModal}
-        managerProfile={managerProfile}
-        setShowProfileModal={setShowProfileModal}
-        setManagerProfile={setManagerProfile}
+
+      <ChangePasswordModal
+        isOpen={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+        onLogout={onLogout}
         darkMode={darkMode}
       />
+
 
       {/* Overlay for mobile sidebar */}
       {sidebarOpen && (

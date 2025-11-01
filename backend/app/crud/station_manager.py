@@ -244,6 +244,7 @@ async def get_manager_stations(manager_id: str) -> List[Dict[str, Any]]:
     try:
         supabase = await get_supabase_client()
         response = supabase.table("stations").select("*").eq("station_manager", manager_id).execute()
+        print(f"Fetched stations for manager {manager_id}: {response.data}*10")
         return response.data or []
     except httpx.HTTPError as e:
         print(f"Error fetching stations for manager {manager_id}: {e}")

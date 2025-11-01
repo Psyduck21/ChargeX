@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, Calendar, MapPin, Zap, Users } from 'lucide-react';
+import { BarChart3, Calendar, MapPin, Zap, Users, User, EvCharger } from 'lucide-react';
 
 export default function ManagerSidebar({
   activeTab,
@@ -12,11 +12,12 @@ export default function ManagerSidebar({
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'bookings', label: 'Bookings', icon: Calendar },
-    { id: 'slots', label: 'Slots', icon: MapPin },
+    { id: 'slots', label: 'Slots', icon: EvCharger },
     { id: 'stations', label: 'My Stations', icon: MapPin },
+    { id: 'profile', label: 'Profile', icon: User },
   ];
 
-  const activeBookings = stations.reduce((sum, s) => sum + s.occupied_slots, 0);
+  const activeBookings = stations.reduce((sum, s) => sum + (Number(s.occupied_slots) || 0), 0);
 
   return (
     <aside className={`fixed left-0 top-0 h-screen w-64 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r p-6 transition-transform duration-300 z-40 ${
@@ -26,7 +27,7 @@ export default function ManagerSidebar({
         <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
           <Zap className="w-6 h-6 text-white" />
         </div>
-        <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>EV Charge</span>
+        <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>ChargeX</span>
       </div>
 
       <nav className="space-y-2">

@@ -120,7 +120,7 @@ async def get_user_growth_over_time(days: int = 30) -> List[Dict[str, Any]]:
         return []
 
 
-async def get_energy_consumption_trends(days: int = 30) -> List[Dict[str, Any]]:
+async def get_energy_consumption_trends(days: int = 30, station_ids: List[str] = None) -> List[Dict[str, Any]]:
     """Get energy consumption trends over the last N days"""
     try:
         supabase = await get_supabase_client()
@@ -129,7 +129,14 @@ async def get_energy_consumption_trends(days: int = 30) -> List[Dict[str, Any]]:
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
 
-        response =  supabase.table("charging_sessions").select("start_time, energy_consumed").gte("start_time", start_date.isoformat()).execute()
+        # Build query
+        query = supabase.table("charging_sessions").select("start_time, energy_consumed").gte("start_time", start_date.isoformat())
+
+        # Filter by station_ids if provided (for station managers)
+        if station_ids:
+            query = query.in_("station_id", station_ids)
+
+        response = query.execute()
 
         if not response.data:
             return []
@@ -164,16 +171,23 @@ async def get_energy_consumption_trends(days: int = 30) -> List[Dict[str, Any]]:
         return []
 
 
-async def get_revenue_trends(days: int = 30) -> List[Dict[str, Any]]:
+async def get_revenue_trends(days: int = 30, station_ids: List[str] = None) -> List[Dict[str, Any]]:
     """Get revenue trends over the last N days"""
     try:
         supabase = await get_supabase_client()
 
         # Calculate date range
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
 
-        response =  supabase.table("charging_sessions").select("start_time, cost").gte("start_time", start_date.isoformat()).execute()
+        # Build query
+        query = supabase.table("charging_sessions").select("start_time, cost").gte("start_time", start_date.isoformat())
+
+        # Filter by station_ids if provided (for station managers)
+        if station_ids:
+            query = query.in_("station_id", station_ids)
+
+        response = query.execute()
 
         if not response.data:
             return []
@@ -302,15 +316,21 @@ async def get_station_utilization() -> List[Dict[str, Any]]:
         return []
 
 
-async def get_charging_type_distribution(days: int = 30) -> List[Dict[str, Any]]:
+async def get_charging_type_distribution(days: int = 30, station_ids: List[str] = None) -> List[Dict[str, Any]]:
     """Return distribution of charging types (fast/normal/slow) over the last N days."""
     try:
         supabase = await get_supabase_client()
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
 
-        # Select slot (which is slot_id) from charging_sessions
-        response = supabase.table("charging_sessions").select("slot").gte("start_time", start_date.isoformat()).execute()
+        # Build query for charging sessions
+        query = supabase.table("charging_sessions").select("slot").gte("start_time", start_date.isoformat())
+
+        # Filter by station_ids if provided (for station managers)
+        if station_ids:
+            query = query.in_("station_id", station_ids)
+
+        response = query.execute()
         if not response.data:
             return []
 
@@ -318,7 +338,7 @@ async def get_charging_type_distribution(days: int = 30) -> List[Dict[str, Any]]
         for s in response.data:
             slot_id = s.get("slot")
             if slot_id:
-                slot_response = supabase.table("slots").select("charger_type").eq("id", str(slot_id)).single().execute()
+                slot_response = supabase.table("charging_slots").select("charger_type").eq("id", str(slot_id)).single().execute()
                 if slot_response.data:
                     ctype = slot_response.data.get("charger_type") or "Unknown"
                     counts[ctype] = counts.get(ctype, 0) + 1

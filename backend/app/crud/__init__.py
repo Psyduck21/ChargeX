@@ -25,6 +25,7 @@ from .bookings import (
 
 # Slots
 from .slots import (
+    get_slot,
     list_station_slots,
     create_slot,
     update_slot,
@@ -107,7 +108,7 @@ __all__ = [
     # Bookings
     "get_booking", "create_booking", "update_booking", "list_bookings",
     # Slots
-    "list_station_slots", "create_slot", "update_slot", "list_slots",
+    "get_slot", "list_station_slots", "create_slot", "update_slot", "list_slots",
     # Charging Sessions
     "get_charging_session", "create_charging_session", "update_charging_session",
     "list_charging_sessions", "list_charging_sessions_between",

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { ToastProvider } from './components/ui/Toast.jsx'
 import ProfessionalLogin from './components/login.jsx'
 import ProfessionalSignup from './components/signup.jsx'
 // import ManagerOperations from './components/ManagerOperations.jsx'
@@ -81,7 +82,9 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </ThemeProvider>
   )
 }

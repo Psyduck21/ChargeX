@@ -1,21 +1,46 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapPin, Activity, DollarSign, Zap } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import StatCard from '../admindashboard/StatCard';
 import EmptyState from './EmptyState';
+import apiService from '../../services/api';
 
 export default function OverviewTab({
   stations,
   revenueData,
   energyData,
+  chargerTypeData,
   slotStatusData,
   darkMode = false
 }) {
-  const totalSlots = stations.reduce((sum, s) => sum + s.total_slots, 0);
+  const [chargingSessions, setChargingSessions] = useState([]);
+
+  useEffect(() => {
+    const fetchChargingSessions = async () => {
+      try {
+        const sessions = await apiService.getManagerSessions();
+        setChargingSessions(sessions);
+      } catch (error) {
+        console.error('Failed to fetch charging sessions:', error);
+      }
+    };
+
+    fetchChargingSessions();
+  }, []);
+
+  const totalSlots = stations.reduce((sum, s) => sum + s.capacity, 0);
   const availableSlots = stations.reduce((sum, s) => sum + s.available_slots, 0);
-  const occupiedSlots = stations.reduce((sum, s) => sum + s.occupied_slots, 0);
-  const totalRevenue = stations.reduce((sum, s) => sum + s.revenue_today, 0);
-  const totalEnergy = stations.reduce((sum, s) => sum + s.energy_today, 0);
+  const occupiedSlots = stations.reduce((sum, s) => sum + (s.capacity - s.available_slots), 0);
+
+  // Calculate today's revenue and energy from charging sessions
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  const todaysSessions = chargingSessions.filter(session => {
+    const sessionDate = new Date(session.start_time).toISOString().split('T')[0];
+    return sessionDate === today && session.cost && session.energy_consumed;
+  });
+
+  const totalRevenue = todaysSessions.reduce((sum, session) => sum + (session.cost || 0), 0);
+  const totalEnergy = todaysSessions.reduce((sum, session) => sum + (session.energy_consumed || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -58,7 +83,7 @@ export default function OverviewTab({
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-4 md:p-6 border`}>
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -123,6 +148,57 @@ export default function OverviewTab({
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-4 md:p-6 border`}>
+          <div className="mb-6">
+            <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Charger Types</h3>
+            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Distribution by type</p>
+          </div>
+          {chargerTypeData && chargerTypeData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={chargerTypeData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {chargerTypeData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || '#8884d8'} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: darkMode ? '#1f2937' : 'white',
+                      border: `1px solid ${darkMode ? '#374151' : '#e5e7eb'}`,
+                      color: darkMode ? '#fff' : '#000'
+                    }}
+                    formatter={(value, name) => [`${value} sessions`, 'Count']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-4 space-y-2">
+                {chargerTypeData.map((item, i) => (
+                  <div key={`charger-${i}`} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color || '#8884d8' }}></div>
+                      <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{item.name || 'Unknown'}</span>
+                    </div>
+                    <span className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{item.value || 0}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-32">
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>No charger type data available</p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -132,37 +208,43 @@ export default function OverviewTab({
             <EmptyState message="No stations assigned yet" icon={MapPin} darkMode={darkMode} />
           ) : (
             <div className="space-y-4">
-              {stations.map((station) => (
-                <div key={station.station_id} className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-xl p-4 transition-colors`}>
-                  <div className="flex flex-col md:flex-row md:items-center justify-between mb-3 gap-3">
-                    <div>
-                      <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{station.name}</h4>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'} flex items-center gap-1`}>
-                        <MapPin className="w-3 h-3" />
-                        {station.address}, {station.city}
-                      </p>
+              {stations.map((station, index) => {
+                // Calculate today's revenue for this station from charging sessions
+                const stationTodaysSessions = todaysSessions.filter(session => session.station_id === station.station_id);
+                const stationRevenue = stationTodaysSessions.reduce((sum, session) => sum + (session.cost || 0), 0);
+
+                return (
+                  <div key={station.station_id || `station-${index}`} className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-xl p-4 transition-colors`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-3 gap-3">
+                      <div>
+                        <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{station.name}</h4>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'} flex items-center gap-1`}>
+                          <MapPin className="w-3 h-3" />
+                          {station.address}, {station.city}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-emerald-600">{station.available_slots}</p>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Available</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-emerald-600">{station.available_slots}</p>
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Available</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Total Slots</p>
+                        <p className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{station.capacity}</p>
+                      </div>
+                      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Occupied</p>
+                        <p className="text-lg font-bold text-orange-600">{station.capacity - station.available_slots}</p>
+                      </div>
+                      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Revenue</p>
+                        <p className="text-lg font-bold text-purple-600">₹{stationRevenue.toLocaleString()}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Total Slots</p>
-                      <p className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{station.total_slots}</p>
-                    </div>
-                    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Occupied</p>
-                      <p className="text-lg font-bold text-orange-600">{station.occupied_slots}</p>
-                    </div>
-                    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Revenue</p>
-                      <p className="text-lg font-bold text-purple-600">₹{station.revenue_today}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -192,7 +274,7 @@ export default function OverviewTab({
           </ResponsiveContainer>
           <div className="mt-4 space-y-2">
             {slotStatusData.map((item, i) => (
-              <div key={i} className="flex items-center justify-between">
+              <div key={`status-${i}`} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
                   <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{item.name}</span>

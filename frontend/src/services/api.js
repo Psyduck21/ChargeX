@@ -292,43 +292,43 @@ class ApiService {
   }
 
   async getEnergyConsumptionAnalytics(days = 30) {
-    return this.apiCall(`/stations/admin/analytics/energy-consumption?days=${days}`);
+    return this.apiCall(`/analytics/energy-consumption?days=${days}`);
   }
 
   async getRevenueAnalytics(days = 30) {
-    return this.apiCall(`/stations/admin/analytics/revenue?days=${days}`);
+    return this.apiCall(`/analytics/revenue?days=${days}`);
   }
 
   async getBookingsAnalytics(days = 30) {
-    return this.apiCall(`/stations/admin/analytics/bookings?days=${days}`);
+    return this.apiCall(`/analytics/bookings?days=${days}`);
   }
 
   async getStationUtilizationAnalytics() {
-    return this.apiCall('/stations/admin/analytics/station-utilization');
+    return this.apiCall('/analytics/station-utilization');
   }
 
   async getChargingTypeAnalytics(days = 30) {
-    return this.apiCall(`/stations/admin/analytics/charging-types?days=${days}`);
+    return this.apiCall(`/analytics/charging-types?days=${days}`);
   }
 
   async getPeakHoursAnalytics(hours = 24) {
-    return this.apiCall(`/stations/admin/analytics/peak-hours?hours=${hours}`);
+    return this.apiCall(`/analytics/peak-hours?hours=${hours}`);
   }
 
   async getActiveSessionsCount() {
-    return this.apiCall('/stations/admin/analytics/active-sessions');
+    return this.apiCall('/analytics/active-sessions');
   }
 
   async getAverageSessionDuration() {
-    return this.apiCall('/stations/admin/analytics/avg-session-duration');
+    return this.apiCall('/analytics/avg-session-duration');
   }
 
   async getCO2Saved() {
-    return this.apiCall('/stations/admin/analytics/co2-saved');
+    return this.apiCall('/analytics/co2-saved');
   }
 
   async getRecentActivity(limit = 10) {
-    return this.apiCall(`/stations/admin/analytics/recent-activity?limit=${limit}`);
+    return this.apiCall(`/analytics/recent-activity?limit=${limit}`);
   }
 
   // User Profile APIs

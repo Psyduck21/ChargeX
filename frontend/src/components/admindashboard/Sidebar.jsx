@@ -1,5 +1,6 @@
 import React from 'react';
 import { BarChart3, Users, MapPin, Download, Zap, LogOut, User, Settings } from 'lucide-react';
+import Tooltip from '../manager/Tooltip';
 
 export default function Sidebar({ activeTab, setActiveTab, adminProfile, onLogout, onProfileClick }) {
   return (
@@ -12,83 +13,97 @@ export default function Sidebar({ activeTab, setActiveTab, adminProfile, onLogou
       </div>
 
       <nav className="space-y-2">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
-            activeTab === 'overview'
-              ? 'bg-emerald-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <BarChart3 className="w-5 h-5" />
-          Overview
-        </button>
+        <Tooltip text="View dashboard overview and analytics">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
+              activeTab === 'overview'
+                ? 'bg-emerald-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <BarChart3 className="w-5 h-5" />
+            Overview
+          </button>
+        </Tooltip>
 
-        <button
-          onClick={() => setActiveTab('stations')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
-            activeTab === 'stations'
-              ? 'bg-emerald-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <MapPin className="w-5 h-5" />
-          Stations
-        </button>
+        <Tooltip text="Manage charging stations">
+          <button
+            onClick={() => setActiveTab('stations')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
+              activeTab === 'stations'
+                ? 'bg-emerald-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <MapPin className="w-5 h-5" />
+            Stations
+          </button>
+        </Tooltip>
 
-        <button
-          onClick={() => setActiveTab('managers')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
-            activeTab === 'managers'
-              ? 'bg-emerald-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <Users className="w-5 h-5" />
-          Managers
-        </button>
+        <Tooltip text="Manage station managers">
+          <button
+            onClick={() => setActiveTab('managers')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
+              activeTab === 'managers'
+                ? 'bg-emerald-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Users className="w-5 h-5" />
+            Managers
+          </button>
+        </Tooltip>
 
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
-            activeTab === 'users'
-              ? 'bg-emerald-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <Users className="w-5 h-5" />
-          Users
-        </button>
+        <Tooltip text="View and manage users">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
+              activeTab === 'users'
+                ? 'bg-emerald-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Users className="w-5 h-5" />
+            Users
+          </button>
+        </Tooltip>
 
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
-            activeTab === 'reports'
-              ? 'bg-emerald-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <Download className="w-5 h-5" />
-          Reports
-        </button>
+        <Tooltip text="Generate and download reports">
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
+              activeTab === 'reports'
+                ? 'bg-emerald-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Download className="w-5 h-5" />
+            Reports
+          </button>
+        </Tooltip>
       </nav>
 
       <div className="absolute bottom-6 left-6 right-6 space-y-2">
-        <button
-          onClick={onProfileClick}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-        >
-          <Settings className="w-5 h-5" />
-          Profile
-        </button>
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-        >
-          <User className="w-5 h-5" />
-          <div className="flex-1 text-left">{adminProfile.name}</div>
-          <LogOut className="w-5 h-5" />
-        </button>
+        <Tooltip text="View and edit your profile">
+          <button
+            onClick={onProfileClick}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            <Settings className="w-5 h-5" />
+            Profile
+          </button>
+        </Tooltip>
+        <Tooltip text="Sign out of your account">
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            <User className="w-5 h-5" />
+            <div className="flex-1 text-left">{adminProfile.name}</div>
+            <LogOut className="w-5 h-5" />
+          </button>
+        </Tooltip>
       </div>
     </aside>
   );
