@@ -9,7 +9,7 @@ import ManagerProfileModal from './ManagerProfileModal';
 import OverviewTab from './manager/OverviewTab';
 import BookingsTab from './manager/BookingsTab';
 import SlotsTab from './manager/SlotsTab';
-import apiService from '../../services/api';
+import apiService from '../services/api';
 
 export default function StationManagerDashboard({onLogout}) {
   const [activeTab, setActiveTab] = useState('overview');
