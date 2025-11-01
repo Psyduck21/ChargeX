@@ -7,17 +7,18 @@ import ProfessionalSignup from './components/signup.jsx'
 import StationManagerDashboard from './components/ManagerDashboard.jsx'
 import UserOperations from './components/UserOperations.jsx'
 import AdminDashboard from './components/Admindashboard.jsx'
+import LandingPage from './components/LandingPage.jsx'
 import apiService from './services/api.js'
 
 function AppContent() {
-  const [view, setView] = useState('login')
+  const [view, setView] = useState('landing')
   const [role, setRole] = useState('')
-  
+
   // Check for existing session on mount
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     const storedRole = localStorage.getItem('user_role');
-    
+
     if (token && storedRole) {
       setRole(storedRole);
       setView('dashboard');
@@ -28,14 +29,35 @@ function AppContent() {
     try {
       await apiService.logout();
       setRole('');
-      setView('login');
+      setView('landing');
     } catch (error) {
       console.error('Logout failed:', error);
     }
   };
 
+  const handleSwitchToLogin = () => setView('login');
+  const handleSwitchToSignup = () => setView('signup');
+
+  const handleLoggedIn = async (data) => {
+    try {
+      const userRole = data?.user?.role || 'app_user';
+      setRole(userRole);
+      setView('dashboard');
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background font-sans">
+      {view === 'landing' && (
+        <LandingPage
+          onSwitchToLogin={handleSwitchToLogin}
+          onSwitchToSignup={handleSwitchToSignup}
+          onLoggedIn={handleLoggedIn}
+        />
+      )}
       {view === 'login' && (
         <ProfessionalLogin
           onSwitchToSignup={() => setView('signup')}
