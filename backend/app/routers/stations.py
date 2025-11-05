@@ -42,13 +42,16 @@ router = APIRouter(prefix="/stations", tags=["Stations"])
 
 @router.get("/", response_model=List[StationOut], dependencies=[Depends(get_current_user)])
 async def read_stations(current_user: dict = Depends(get_current_user)):
-    """List all stations. Admin sees all, managers see only their assigned stations."""
+    """List all stations. Admin sees all, managers see only their assigned stations, users can view all stations."""
     if current_user.get("role") == "admin":
         # Admin sees all stations
         return await list_stations()
     elif current_user.get("role") == "station_manager":
         # Manager sees only stations assigned to them
         return await get_manager_stations(current_user["id"])
+    elif current_user.get("role") == "app_user":
+        # Regular users can view all stations for booking purposes
+        return await list_stations()
     else:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
@@ -59,7 +62,7 @@ async def add_station(station: StationCreate, current_user: dict = Depends(get_c
     if not station.name or not station.city:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing name or location")
 
-    created = await create_station(station)
+    created = await create_station(station.dict())
     if not created:
         raise HTTPException(status_code=500, detail="Failed to create station")
 

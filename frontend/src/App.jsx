@@ -5,7 +5,7 @@ import ProfessionalLogin from './components/login.jsx'
 import ProfessionalSignup from './components/signup.jsx'
 // import ManagerOperations from './components/ManagerOperations.jsx'
 import StationManagerDashboard from './components/ManagerDashboard.jsx'
-import UserOperations from './components/UserOperations.jsx'
+import UserDashboard from './components/UserDashboard.jsx'
 import AdminDashboard from './components/Admindashboard.jsx'
 import LandingPage from './components/LandingPage.jsx'
 import apiService from './services/api.js'
@@ -94,7 +94,7 @@ function AppContent() {
         <div className="p-4">
           {role === 'admin' && <AdminDashboard onLogout={handleLogout} />}
           {role === 'station_manager' && <StationManagerDashboard onLogout={handleLogout} />}
-          {role === 'app_user' && <UserOperations onLogout={handleLogout} />}
+          {role === 'app_user' && <UserDashboard onLogout={handleLogout} />}
         </div>
       )}
     </div>

@@ -15,24 +15,25 @@ async def get_slots(current_user: Any = Depends(get_current_user)):
     List all slots visible to the current user.
     - Admin: can see all slots
     - Station managers: see only slots for their stations
-    - Other users: not authorized
+    - Regular users: can see all slots for booking purposes
     """
     role = (
         current_user.get("role")
         if isinstance(current_user, dict)
         else getattr(current_user, "role", None)
     )
-    if role not in ["station_manager", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized"
-        )
 
     station_ids = (
         current_user.get("station_ids", [])
         if isinstance(current_user, dict)
         else getattr(current_user, "station_ids", [])
     )
+
+    # Regular users can see all slots for booking
+    if role == "app_user":
+        return await list_slots([])  # Empty list means all slots
+
+    # Station managers and admins see filtered slots
     return await list_slots(station_ids)
 
 

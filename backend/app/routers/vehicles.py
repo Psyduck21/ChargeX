@@ -57,7 +57,7 @@ async def modify_vehicle(vehicle_id: UUID, update_data: VehicleUpdate, current_u
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found")
     
     user_id = current_user["id"] if isinstance(current_user, dict) else current_user.id
-    if vehicle.get("owner_id") != str(user_id):
+    if vehicle.owner_id != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     
     return await update_vehicle(vehicle_id, update_data)

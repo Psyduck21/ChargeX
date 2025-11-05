@@ -39,14 +39,72 @@ async def list_user_vehicles(owner_id: UUID) -> List[Dict[str, Any]]:
 
 async def list_stations() -> List[Dict[str, Any]]:
     supabase = await get_supabase_client()
-    response =  supabase.table("stations").select("*").execute()
-    return response.data or []
 
-# list_stations must exist
-async def list_stations() -> list[dict]:
-    supabase = await get_supabase_client()
-    response =  supabase.table("stations").select("*").execute()
-    return response.data or []
+    # Get all stations
+    stations_response = supabase.table("stations").select("*").execute()
+    stations = stations_response.data or []
+
+    # Get all active charging sessions to check slot occupancy
+    active_sessions_response = supabase.table("charging_sessions").select("slot").is_("end_time", None).execute()
+    occupied_slot_ids = set()
+    if active_sessions_response.data:
+        occupied_slot_ids = {str(session.get("slot")) for session in active_sessions_response.data if session.get("slot")}
+
+    # For each station, calculate available and total slots from charging_slots table
+    for station in stations:
+        station_id = station.get("id")
+
+        # Get all slots for this station
+        slots_response = supabase.table("charging_slots").select("id, is_available, status, connector_type, max_power_kw").eq("station_id", station_id).execute()
+        slots = slots_response.data or []
+
+        # Calculate total and available slots
+        # A slot is available only if:
+        # 1. is_available is True AND status is not 'maintenance'/'disabled'/etc.
+        # 2. Slot is not currently occupied by an active charging session
+        total_slots = len(slots)
+        available_slots = 0
+
+        # Collect unique connector types from slots
+        connector_types = []
+        seen_connectors = set()
+
+        for slot in slots:
+            slot_id = str(slot.get("id"))
+            is_slot_available = slot.get("is_available", False)
+            slot_status = slot.get("status", "").lower()
+            is_not_occupied = slot_id not in occupied_slot_ids
+            is_not_under_maintenance = slot_status not in ["maintenance", "disabled", "out_of_order"]
+
+            if is_slot_available and is_not_occupied and is_not_under_maintenance:
+                available_slots += 1
+
+            # Collect connector types
+            connector_type = slot.get("connector_type")
+            max_power = slot.get("max_power_kw", 0)
+            if connector_type:
+                connector_key = f"{connector_type}_{max_power}"
+                if connector_key not in seen_connectors:
+                    seen_connectors.add(connector_key)
+                    connector_types.append({
+                        "type": connector_type,
+                        "power": f"{max_power}kW" if max_power else "N/A",
+                        "available": 1 if (is_slot_available and is_not_occupied and is_not_under_maintenance) else 0
+                    })
+                else:
+                    # Update available count for existing connector type
+                    for conn in connector_types:
+                        if conn["type"] == connector_type and conn["power"] == f"{max_power}kW":
+                            if is_slot_available and is_not_occupied and is_not_under_maintenance:
+                                conn["available"] += 1
+                            break
+
+        # Update station with calculated values
+        station["total_slots"] = total_slots
+        station["available_slots"] = available_slots
+        station["connector_types"] = connector_types
+
+    return stations
 
 # list_managers_for_station must exist
 async def list_managers_for_station(manager_id: UUID) -> list[dict]:
