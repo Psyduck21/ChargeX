@@ -2,10 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.exceptions import RequestValidationError
 import time
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.exceptions import HTTPException as StarletteHTTPException
 import os
 from dotenv import load_dotenv
 import logging
@@ -20,6 +18,7 @@ import logging
 import asyncio
 
 # Configure logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
