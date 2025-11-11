@@ -94,22 +94,32 @@ function ChargeXUserDashboard({ onLogout }) {
     requestLocationPermission();
   }, []);
 
+  // Load user statistics
+  const loadUserStats = async () => {
+    try {
+      const stats = await apiService.getUserStatistics();
+      if (stats) {
+        setUserStats({
+          totalBookings: stats.total_bookings || 0,
+          totalEnergy: stats.total_energy || 0,
+          totalSpent: stats.total_spent || 0,
+          co2Saved: stats.co2_saved || 0
+        });
+      }
+    } catch (error) {
+      console.error('Error loading user stats:', error);
+    }
+  };
+
+  // Load user stats when component mounts
+  useEffect(() => {
+    loadUserStats();
+  }, []);
+
   // Update booking names when stations/vehicles data is loaded
   useEffect(() => {
     if (bookings.length > 0 && stations.length > 0 && vehicles.length > 0) {
-      console.log('🔄 Updating booking names');
-      console.log('📊 Available stations:', stations.map(s => ({ id: s.id, name: s.name })));
-      console.log('🚗 Available vehicles:', vehicles.map(v => ({ id: v.id, name: `${v.brand} ${v.model}` })));
-
       const updatedBookings = bookings.map(b => {
-        console.log('📋 Processing booking:', {
-          id: b.id,
-          station_id: b.station_id,
-          vehicle_id: b.vehicle_id,
-          current_station_name: b.station_name,
-          current_vehicle_name: b.vehicle_name
-        });
-
         // Find station name from loaded stations data
         let stationName = b.station_name || 'Unknown Station';
         let stationAddress = b.station_address || 'Address not available';
@@ -117,15 +127,11 @@ function ChargeXUserDashboard({ onLogout }) {
         if (b.station_id) {
           const station = stations.find(s => {
             const match = String(s.id) === String(b.station_id);
-            console.log(`🔍 Comparing station IDs: "${s.id}" === "${b.station_id}" => ${match}`);
             return match;
           });
           if (station) {
             stationName = station.name;
             stationAddress = station.address;
-            console.log('✅ Found station:', stationName);
-          } else {
-            console.log('❌ Station not found for ID:', b.station_id);
           }
         }
 
@@ -135,14 +141,10 @@ function ChargeXUserDashboard({ onLogout }) {
         if (b.vehicle_id) {
           const vehicle = vehicles.find(v => {
             const match = String(v.id) === String(b.vehicle_id);
-            console.log(`🔍 Comparing vehicle IDs: "${v.id}" === "${b.vehicle_id}" => ${match}`);
             return match;
           });
           if (vehicle) {
             vehicleName = `${vehicle.brand} ${vehicle.model}`;
-            console.log('✅ Found vehicle:', vehicleName);
-          } else {
-            console.log('❌ Vehicle not found for ID:', b.vehicle_id);
           }
         }
 
@@ -188,7 +190,6 @@ function ChargeXUserDashboard({ onLogout }) {
         };
       });
 
-      console.log('📝 Final updated bookings:', updatedBookings);
       setBookings(updatedBookings);
     }
   }, [stations, vehicles]);
@@ -196,7 +197,6 @@ function ChargeXUserDashboard({ onLogout }) {
   // Update distances when both stations and user location are available
   useEffect(() => {
     if (stations.length > 0 && userLocation && !stations.some(s => s.distance > 0)) {
-      console.log('📍 Both stations and location available, updating distances');
       updateStationDistances(userLocation);
     }
   }, [stations, userLocation]);
@@ -210,16 +210,13 @@ function ChargeXUserDashboard({ onLogout }) {
             lat: position.coords.latitude,
             lng: position.coords.longitude
           };
-          console.log('✅ User location granted:', userLoc);
           setUserLocation(userLoc);
           setLocationPermission('granted');
           updateStationDistances(userLoc);
         },
         (error) => {
-          console.log('❌ User location denied, using fallback');
           setLocationPermission('denied');
           const defaultLocation = { lat: 28.6139, lng: 77.2090 };
-          console.log('📍 User location (fallback):', defaultLocation);
           setUserLocation(defaultLocation);
           updateStationDistances(defaultLocation);
         },
@@ -230,10 +227,8 @@ function ChargeXUserDashboard({ onLogout }) {
         }
       );
     } else {
-      console.log('❌ Geolocation not supported, using fallback');
       setLocationPermission('denied');
       const defaultLocation = { lat: 28.6139, lng: 77.2090 };
-      console.log('📍 User location (fallback):', defaultLocation);
       setUserLocation(defaultLocation);
       updateStationDistances(defaultLocation);
     }
@@ -241,9 +236,7 @@ function ChargeXUserDashboard({ onLogout }) {
 
   // Calculate driving distance using Haversine formula
   const calculateDrivingDistance = async (origin, destination) => {
-    console.log(`🗺️ Calculating distance from ${origin.lat},${origin.lng} to ${destination.lat},${destination.lng}`);
     const distance = calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng);
-    console.log('📏 Distance (Haversine):', distance, 'km');
     return distance;
   };
 
@@ -264,11 +257,9 @@ function ChargeXUserDashboard({ onLogout }) {
   // Update distances for all stations
   const updateStationDistances = async (userLoc) => {
     if (!userLoc) return;
-    console.log('🔄 Updating distances for', stations.length, 'stations');
 
     const distancePromises = stations.map(async (station) => {
       if (!station.lat || !station.lng) {
-        console.log(`⚠️ Station ${station.name} missing coordinates`);
         return { ...station, distance: 0 };
       }
 
@@ -277,21 +268,17 @@ function ChargeXUserDashboard({ onLogout }) {
           { lat: userLoc.lat, lng: userLoc.lng },
           { lat: station.lat, lng: station.lng }
         );
-        console.log(`✅ Station ${station.name}: distance = ${distance} km`);
         return { ...station, distance: distance };
       } catch (error) {
         console.error('❌ Error calculating distance for station:', station.name, error);
         const distance = calculateHaversineDistance(userLoc.lat, userLoc.lng, station.lat, station.lng);
-        console.log(`📏 Station ${station.name}: fallback distance = ${distance} km`);
         return { ...station, distance: distance };
       }
     });
 
     try {
       const updatedStations = await Promise.all(distancePromises);
-      console.log('📊 Updated stations with distances:', updatedStations.map(s => ({ name: s.name, distance: s.distance })));
       setStations(updatedStations);
-      console.log('✅ Stations state updated');
     } catch (error) {
       console.error('❌ Error updating station distances:', error);
       const updatedStations = stations.map(station => ({
@@ -300,7 +287,6 @@ function ChargeXUserDashboard({ onLogout }) {
           ? calculateHaversineDistance(userLoc.lat, userLoc.lng, station.lat, station.lng)
           : 0
       }));
-      console.log('📏 Using fallback distances for all stations');
       setStations(updatedStations);
     }
   };
@@ -353,11 +339,9 @@ function ChargeXUserDashboard({ onLogout }) {
 
       // Fetch user bookings (store raw data, transformation happens in useEffect)
       const bookingsData = await apiService.getUserBookings();
-      console.log('Fetched bookings data:', bookingsData);
       if (bookingsData && bookingsData.length > 0) {
         setBookings(bookingsData); // Store raw booking data
       } else {
-        console.log('No bookings data received');
         setBookings([]);
       }
 
@@ -384,15 +368,10 @@ function ChargeXUserDashboard({ onLogout }) {
           photos: s.photos || []
         }));
 
-        transformedStations.forEach(station => {
-          console.log(`Station ${station.name}: {lat: ${station.lat}, lng: ${station.lng}}`);
-        });
-
         setStations(transformedStations);
         setFilteredStations(transformedStations);
 
         if (userLocation) {
-          console.log('📍 User location already available, updating distances for loaded stations');
           updateStationDistances(userLocation);
         }
       }
@@ -454,8 +433,7 @@ function ChargeXUserDashboard({ onLogout }) {
         const slots = slotsResp || [];
         const bookingsResp = await apiService.getBookings();
         const bookings = bookingsResp || [];
-        console.debug('Slots fetched', { station: selectedStation.id, count: slots.length });
-        console.debug('Bookings fetched', { station: selectedStation.id, count: bookings.length });
+
 
         // Filter bookings for this station and sensible statuses
         const stationBookings = bookings.filter(b => String(b.station_id) === String(selectedStation.id) && b.status !== 'rejected' && b.status !== 'cancelled');
@@ -695,7 +673,6 @@ function ChargeXUserDashboard({ onLogout }) {
                         charging_connector: newVehicle.chargingConnector
                       }
                       const addedVehicle = await apiService.createVehicle(vehicleData);
-                      console.log('Added vehicle:', vehicleData);
 
                       setVehicles([...vehicles, {
                         id: addedVehicle.id,
@@ -891,7 +868,6 @@ function ChargeXUserDashboard({ onLogout }) {
                         charging_connector: editVehicle.chargingConnector
                       }
                       const updatedVehicle = await apiService.updateVehicle(editingVehicle.id, vehicleData);
-                      console.log('Updated vehicle:', vehicleData);
 
                       setVehicles(vehicles.map(v =>
                         v.id === editingVehicle.id ? {
