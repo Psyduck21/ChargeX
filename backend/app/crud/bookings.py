@@ -223,7 +223,7 @@ async def list_bookings(user_id: Optional[UUID] = None) -> List[BookingOut]:
             # Get vehicle info
             try:
                 if item.get('vehicle_id'):
-                    vehicle_resp = supabase.table("vehicles").select("name, brand, model").eq("id", str(item['vehicle_id'])).single().execute()
+                    vehicle_resp = supabase.table("vehicles").select("brand, model").eq("id", str(item['vehicle_id'])).single().execute()
                     if vehicle_resp.data:
                         vehicle = vehicle_resp.data
                         transformed['vehicle_name'] = f"{vehicle.get('brand', '')} {vehicle.get('model', '')}".strip() or vehicle.get('name', 'Unknown Vehicle')
@@ -257,7 +257,7 @@ async def list_bookings(user_id: Optional[UUID] = None) -> List[BookingOut]:
             # Get slot info
             try:
                 if item.get('slot_id'):
-                    slot_resp = supabase.table("slots").select("connector_type").eq("id", str(item['slot_id'])).single().execute()
+                    slot_resp = supabase.table("charging_slots").select("connector_type").eq("id", str(item['slot_id'])).single().execute()
                     if slot_resp.data:
                         slot = slot_resp.data
                         transformed['connector_type'] = slot.get('connector_type', 'Unknown')
