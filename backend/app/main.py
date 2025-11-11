@@ -109,6 +109,7 @@ origins = [
 # Add production origins from environment
 if os.getenv("PRODUCTION_FRONTEND_URL"):
     origins.append(os.getenv("PRODUCTION_FRONTEND_URL"))
+    print(os.getenv("PRODUCTION_FRONTEND_URL"))
 
 # Add security middlewares
 app.add_middleware(RateLimitMiddleware, calls=100, period=60)  # 100 requests per minute
