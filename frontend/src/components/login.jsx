@@ -17,7 +17,7 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
     setLoading(true);
     try {
       const data = await apiService.login(email, password);
-      console.log('Login response:', data);
+      //console.log('Login response:', data);
       
       // Save tokens for authenticated requests
       if (data?.access_token) {
