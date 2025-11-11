@@ -37,7 +37,7 @@ async def get_supabase_client() -> Client:
     if not _supabase_client:
         check_env_vars()
         print(f"Initializing Supabase client with URL: {SUPABASE_URL}")
-        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY, options=options)
+        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
     return _supabase_client
 
 # --- Service role client ---
@@ -47,11 +47,11 @@ async def get_supabase_service_role_client() -> Client:
     if not _supabase_service_role_client:
         check_env_vars()
         print(f"Initializing Supabase service role client with URL: {SUPABASE_URL}")
-        _supabase_service_role_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, options=options)
+        _supabase_service_role_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     return _supabase_service_role_client
 
 # --- Init DB (optional startup test) ---
 def init_db():
     """Initialize Supabase connection."""
-    _ = create_client(SUPABASE_URL, SUPABASE_KEY, options=options)
+    _ = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("✅ Supabase client initialized.")
