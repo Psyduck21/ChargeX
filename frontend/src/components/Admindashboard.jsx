@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 import Sidebar from './admindashboard/Sidebar';
 import OverviewTab from './admindashboard/OverviewTab';
 import StationsTab from './admindashboard/StationsTab';
@@ -17,6 +18,9 @@ import toast from 'react-hot-toast';
 import apiService from '../services/api';
 
 export default function AdminDashboard({ onLogout }) {
+  const { theme, toggleTheme, themeType, isSystem } = useTheme();
+  const isDark = theme === 'dark';
+
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalStations: 0, totalManagers: 0, totalBookings: 0, totalUsers: 0, totalRevenue: 0, totalEnergy: 0 });
@@ -437,25 +441,26 @@ export default function AdminDashboard({ onLogout }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         adminProfile={adminProfile}
         onLogout={onLogout}
         onProfileClick={() => setShowProfileModal(true)}
+        darkMode={isDark}
       />
 
       {/* Main Content */}
       <main className="ml-64 p-8">
         <header className="mb-8">
-          <Breadcrumb breadcrumbs={breadcrumbs} onNavigate={setActiveTab} darkMode={false} />
+          <Breadcrumb breadcrumbs={breadcrumbs} onNavigate={setActiveTab} darkMode={isDark} />
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-1">
+              <h1 className={`text-3xl font-bold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
               </h1>
-              <p className="text-gray-500">Manage and monitor your EV charging infrastructure</p>
+              <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Manage and monitor your EV charging infrastructure</p>
             </div>
             <div className="flex items-center gap-3">
               <Tooltip text="Search across stations, managers, and users">
@@ -463,9 +468,9 @@ export default function AdminDashboard({ onLogout }) {
                   <input
                     type="text"
                     placeholder="Search..."
-                    className="w-64 pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className={`w-64 pl-10 pr-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 ${isDark ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-200'}`}
                   />
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-400'}`} />
                 </div>
               </Tooltip>
             </div>
@@ -488,6 +493,7 @@ export default function AdminDashboard({ onLogout }) {
                 stationUtilization={stationUtilization}
                 realTimeStats={realTimeStats}
                 recentActivities={recentActivities}
+                darkMode={isDark}
               />
             )}
             {activeTab === 'stations' && (
@@ -500,6 +506,7 @@ export default function AdminDashboard({ onLogout }) {
                 onDeleteStation={handleDeleteStation}
                 managers={managers}
                 onAssignManager={handleAssignManager}
+                darkMode={isDark}
               />
             )}
             {activeTab === 'managers' && (
@@ -512,6 +519,7 @@ export default function AdminDashboard({ onLogout }) {
                 onDeleteManager={handleDeleteManager}
                 onAssignStations={handleAssignStations}
                 stations={stations}
+                darkMode={isDark}
               />
             )}
             {activeTab === 'users' && (
@@ -519,9 +527,10 @@ export default function AdminDashboard({ onLogout }) {
                 users={users}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
+                darkMode={isDark}
               />
             )}
-            {activeTab === 'reports' && <ReportsTab />}
+            {activeTab === 'reports' && <ReportsTab darkMode={isDark} />}
           </>
         )}
       </main>

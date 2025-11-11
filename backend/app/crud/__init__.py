@@ -97,7 +97,8 @@ from .statistics import (
     get_average_session_duration,
     calculate_co2_saved,
     log_user_activity,
-    get_recent_activity
+    get_recent_activity,
+    get_user_statistics
 )
 
 __all__ = [
@@ -127,5 +128,5 @@ __all__ = [
     "get_user_growth_over_time", "get_energy_consumption_trends", "get_revenue_trends",
     "get_bookings_trends", "get_station_utilization", "get_charging_type_distribution", "get_peak_hours",
     "get_active_sessions_count", "get_average_session_duration", "calculate_co2_saved",
-    "log_user_activity", "get_recent_activity",
+    "log_user_activity", "get_recent_activity", "get_user_statistics",
 ]

@@ -723,3 +723,56 @@ async def get_recent_activity(limit: int = 10) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"Error getting recent activity: {e}")
         return []
+
+
+async def get_user_statistics(user_id: UUID) -> Dict[str, Any]:
+    """Get statistics for a specific user (total bookings, energy used, total spent, CO2 saved)."""
+    try:
+        supabase = await get_supabase_client()
+
+        # Get total bookings count for user
+        bookings_response = supabase.table("bookings").select("id", count="exact").eq("user_id", str(user_id)).execute()
+        total_bookings = bookings_response.count or 0
+
+        # Get total energy consumed and total spent from charging sessions
+        sessions_response = supabase.table("charging_sessions").select("energy_consumed, cost").eq("user_id", str(user_id)).not_.is_("end_time", None).execute()
+
+        total_energy = 0.0
+        total_spent = 0.0
+
+        if sessions_response.data:
+            for session in sessions_response.data:
+                energy = session.get("energy_consumed", 0)
+                cost = session.get("cost", 0)
+                if energy:
+                    total_energy += float(energy)
+                if cost:
+                    total_spent += float(cost)
+
+        # Calculate CO2 saved (0.25 kg CO2 saved per kWh is a conservative estimate)
+        CO2_PER_KWH = 0.25
+        co2_saved_kg = total_energy * CO2_PER_KWH
+
+        # Format CO2 saved
+        if co2_saved_kg >= 1000:  # Convert to tons if >= 1 ton
+            co2_saved = f"{(co2_saved_kg / 1000):.1f} t"
+        elif co2_saved_kg >= 1:   # Show kg if >= 1 kg
+            co2_saved = f"{int(co2_saved_kg)} kg"
+        else:  # Show grams for small amounts
+            co2_saved = f"{int(co2_saved_kg * 1000)} g"
+
+        return {
+            "totalBookings": total_bookings,
+            "totalEnergy": round(total_energy, 2),  # in kWh
+            "totalSpent": round(total_spent, 2),    # in currency
+            "co2Saved": co2_saved                    # formatted string
+        }
+
+    except Exception as e:
+        print(f"Error getting user statistics for {user_id}: {e}")
+        return {
+            "totalBookings": 0,
+            "totalEnergy": 0.0,
+            "totalSpent": 0.0,
+            "co2Saved": "0 kg"
+        }

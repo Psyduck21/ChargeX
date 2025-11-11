@@ -1,21 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import Any, List
+from typing import Any, List, Optional
 from uuid import UUID
 
 from ..dependencies import get_current_user
-from ..crud import list_slots, create_slot, update_slot, get_slot
+from ..crud import list_slots, list_station_slots, create_slot, update_slot, get_slot
 from ..models import SlotCreate, SlotUpdate, SlotOut
 
 router = APIRouter(prefix="/slots", tags=["Slots"])
 
 
 @router.get("/", response_model=List[SlotOut])
-async def get_slots(current_user: Any = Depends(get_current_user)):
+async def get_slots(
+    station_id: Optional[UUID] = None,
+    current_user: Any = Depends(get_current_user)
+):
     """
-    List all slots visible to the current user.
-    - Admin: can see all slots
-    - Station managers: see only slots for their stations
-    - Regular users: can see all slots for booking purposes
+    List slots visible to the current user.
+    - If station_id is provided, return slots for that specific station (if user has access)
+    - Otherwise, return all slots visible to the user:
+      * Admin: can see all slots
+      * Station managers: see only slots for their stations
+      * Regular users: can see all slots for booking purposes
     """
     role = (
         current_user.get("role")
@@ -23,18 +28,33 @@ async def get_slots(current_user: Any = Depends(get_current_user)):
         else getattr(current_user, "role", None)
     )
 
-    station_ids = (
+    user_station_ids = (
         current_user.get("station_ids", [])
         if isinstance(current_user, dict)
         else getattr(current_user, "station_ids", [])
     )
 
+    # If station_id is provided, filter by that specific station
+    if station_id:
+        # Check permissions based on role
+        if role == "station_manager":
+            # Station managers can only access their own stations
+            user_station_ids = [UUID(sid) for sid in user_station_ids]
+            if station_id not in user_station_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to access slots for this station"
+                )
+        # Admins and users can access any station
+        return await list_station_slots(station_id)
+
+    # No station_id provided - return all accessible slots
     # Regular users can see all slots for booking
     if role == "app_user":
         return await list_slots([])  # Empty list means all slots
 
     # Station managers and admins see filtered slots
-    return await list_slots(station_ids)
+    return await list_slots(user_station_ids)
 
 
 @router.post("/", response_model=SlotOut)

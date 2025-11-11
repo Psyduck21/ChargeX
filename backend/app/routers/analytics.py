@@ -13,6 +13,7 @@ from ..crud import (
     get_average_session_duration,
     calculate_co2_saved,
     get_recent_activity,
+    get_user_statistics,
 )
 
 
@@ -115,6 +116,17 @@ async def get_co2_saved_api(current_user: dict = Depends(get_current_user)):
     co2 = await calculate_co2_saved()
 
     return {"co2_saved": co2}
+
+
+@router.get("/user-statistics")
+async def get_user_statistics_api(current_user: dict = Depends(get_current_user)):
+    """Get statistics for the current user (total bookings, energy used, total spent, CO2 saved)"""
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    statistics = await get_user_statistics(user_id)
+    return statistics
 
 
 @router.get("/recent-activity", response_model=List[Dict[str, Any]], dependencies=[Depends(require_admin_or_manager)])

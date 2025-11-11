@@ -7,6 +7,7 @@ export default function ManagerSidebar({
   onToggle,
   isOpen,
   stations,
+  bookings = [],
   darkMode = false
 }) {
   const menuItems = [
@@ -17,7 +18,8 @@ export default function ManagerSidebar({
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
-  const activeBookings = stations.reduce((sum, s) => sum + (Number(s.occupied_slots) || 0), 0);
+  // Count active bookings (status === 'active')
+  const activeBookings = (bookings || []).filter(booking => booking.status === 'active').length;
 
   return (
     <aside className={`fixed left-0 top-0 h-screen w-64 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r p-6 transition-transform duration-300 z-40 ${
@@ -56,11 +58,11 @@ export default function ManagerSidebar({
       <div className="absolute bottom-6 left-6 right-6">
         <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl p-4 text-white mb-4">
           <div className="flex items-center gap-2 mb-2">
-            <Users className="w-5 h-5" />
-            <p className="text-sm font-medium">Active Users</p>
+            <Zap className="w-5 h-5" />
+            <p className="text-sm font-medium">Active Bookings</p>
           </div>
           <p className="text-2xl font-bold mb-1">{activeBookings}</p>
-          <p className="text-xs text-emerald-100">Charging now</p>
+          <p className="text-xs text-emerald-100">Active bookings</p>
         </div>
       </div>
     </aside>

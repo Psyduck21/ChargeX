@@ -237,6 +237,10 @@ class ApiService {
     return this.apiCall('/bookings/');
   }
 
+  async getUserBookings() {
+    return this.apiCall('/bookings/');
+  }
+
   async createBooking(bookingData) {
     return this.apiCall('/bookings/', {
       method: 'POST',
@@ -325,6 +329,10 @@ class ApiService {
 
   async getCO2Saved() {
     return this.apiCall('/analytics/co2-saved');
+  }
+
+  async getUserStatistics() {
+    return this.apiCall('/analytics/user-statistics');
   }
 
   async getRecentActivity(limit = 10) {

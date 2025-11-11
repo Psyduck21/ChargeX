@@ -7,6 +7,7 @@ import apiService from '../../services/api';
 
 export default function OverviewTab({
   stations,
+  bookings = [],
   revenueData,
   energyData,
   chargerTypeData,
@@ -25,7 +26,13 @@ export default function OverviewTab({
       }
     };
 
+    // Initial fetch
     fetchChargingSessions();
+
+    // Poll every 30 seconds for real-time updates
+    const interval = setInterval(fetchChargingSessions, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const totalSlots = stations.reduce((sum, s) => sum + s.capacity, 0);
@@ -39,8 +46,16 @@ export default function OverviewTab({
     return sessionDate === today && session.cost && session.energy_consumed;
   });
 
+  // Debug logging
+  console.log('All charging sessions:', chargingSessions);
+  console.log('Today date:', today);
+  console.log('Today\'s Sessions:', todaysSessions);
+  console.log('Today\'s Sessions:', todaysSessions);
+  // console.log(session.cost, session.energy_consumed);
   const totalRevenue = todaysSessions.reduce((sum, session) => sum + (session.cost || 0), 0);
   const totalEnergy = todaysSessions.reduce((sum, session) => sum + (session.energy_consumed || 0), 0);
+  console.log('revenueData:', revenueData);
+  console.log('energyData:', energyData);
 
   return (
     <div className="space-y-6">
@@ -50,34 +65,34 @@ export default function OverviewTab({
           value={totalSlots}
           subtitle={`${availableSlots} available`}
           icon={MapPin}
-          color="bg-emerald-600"
+          color="bg-blue-600"
           tooltip="Total charging slots across all your stations"
           darkMode={darkMode}
         />
         <StatCard
-          title="Active Bookings"
-          value={occupiedSlots}
-          change="+12% from yesterday"
+          title="Total Bookings"
+          value={bookings.length}
+          // change="+12% from yesterday"
           icon={Activity}
-          color="bg-blue-600"
-          tooltip="Currently active charging sessions"
+          color="bg-emerald-600"
+          tooltip="Total bookings across all your stations"
           darkMode={darkMode}
         />
         <StatCard
           title="Today's Revenue"
           value={`₹${totalRevenue.toLocaleString()}`}
-          change="+18% from yesterday"
+          // change="+18% from yesterday"
           icon={DollarSign}
-          color="bg-purple-600"
+          color="bg-green-600"
           tooltip="Total revenue generated today"
           darkMode={darkMode}
         />
         <StatCard
           title="Energy Delivered"
           value={`${totalEnergy} kWh`}
-          change="+8% from yesterday"
+          // change="+8% from yesterday"
           icon={Zap}
-          color="bg-orange-600"
+          color="bg-purple-600"
           tooltip="Total energy consumed today"
           darkMode={darkMode}
         />
@@ -157,9 +172,13 @@ export default function OverviewTab({
         ) : (
           <div className="space-y-4">
             {stations.map((station, index) => {
-              // Calculate today's revenue for this station from charging sessions
-              const stationTodaysSessions = todaysSessions.filter(session => session.station_id === station.station_id);
+              // Calculate today's revenue and energy for this station from charging sessions
+              // Use string comparison to handle both UUID objects and strings
+              const stationTodaysSessions = todaysSessions.filter(session =>
+                String(session.station_id) === String(station.station_id)
+              );
               const stationRevenue = stationTodaysSessions.reduce((sum, session) => sum + (session.cost || 0), 0);
+              const stationEnergy = stationTodaysSessions.reduce((sum, session) => sum + (session.energy_consumed || 0), 0);
 
               return (
                 <div key={station.station_id || `station-${index}`} className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-xl p-4 transition-colors`}>
@@ -176,18 +195,26 @@ export default function OverviewTab({
                       <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Available</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Total Slots</p>
-                      <p className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{station.capacity}</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Total Slots</p>
+                        <p className="text-lg font-bold text-blue-600">{station.capacity}</p>
+                      </div>
+                      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Occupied</p>
+                        <p className="text-lg font-bold text-red-600">{station.capacity - station.available_slots}</p>
+                      </div>
                     </div>
-                    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Occupied</p>
-                      <p className="text-lg font-bold text-orange-600">{station.capacity - station.available_slots}</p>
-                    </div>
-                    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Revenue</p>
-                      <p className="text-lg font-bold text-purple-600">₹{stationRevenue.toLocaleString()}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Revenue</p>
+                        <p className="text-lg font-bold text-green-600">₹{stationRevenue.toLocaleString()}</p>
+                      </div>
+                      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Energy</p>
+                        <p className="text-lg font-bold text-purple-600">{stationEnergy} kWh</p>
+                      </div>
                     </div>
                   </div>
                 </div>

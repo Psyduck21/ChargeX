@@ -51,7 +51,7 @@ async def list_admins() -> List[AdminOut]:
         supabase = await get_supabase_client()
         response = supabase.table("admins").select("*").execute()
         items = response.data or []
-        return [AdminOut(**item) for item in items]
+        return [AdminOut(list_profiles**item) for item in items]
     except httpx.HTTPError as e:
         print(f"Error listing admins: {e}")
         return []

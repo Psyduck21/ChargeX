@@ -8,7 +8,7 @@ async def get_charging_session(session_id: UUID) -> Optional[Dict[str, Any]]:
     try:
         supabase = await get_supabase_client()
         response =  supabase.table("charging_sessions").select("*").eq("id", str(session_id)).single().execute()
-        return response.data
+        return response.data[0]
     except httpx.HTTPError as e:
         print(f"Error fetching charging session {session_id}: {e}")
         return None
@@ -52,8 +52,8 @@ async def list_charging_sessions_between(station_ids: List[UUID], start_iso: str
              supabase.table("charging_sessions")
             .select("*")
             .in_("station_id", [str(s) for s in station_ids])
-            .gte("started_at", start_iso)
-            .lte("started_at", end_iso)
+            .gte("start_time", start_iso)
+            .lte("start_time", end_iso)
             .execute()
         )
         return response.data or []

@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, MapPin, Search, Filter, Navigation, Star, Clock, Battery, DollarSign, Calendar, ChevronRight, Heart, User, Bell, Settings, LogOut, Menu, X, Bookmark, History, CreditCard, Phone, Mail, AlertCircle, Car, Plus, Edit2, Trash2, BarChart3, TrendingUp, Leaf, ChevronDown } from 'lucide-react';
+import { Zap, MapPin, Search, Filter, Navigation, Star, Clock, Battery, DollarSign, Calendar, ChevronRight, Heart, User, Bell, Settings, LogOut, Menu, X, Bookmark, History, CreditCard, Phone, Mail, AlertCircle, Car, Plus, Edit2, Trash2, BarChart3, TrendingUp, Leaf, ChevronDown, Sun, Moon, Monitor } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 import ProfileModal from './admindashboard/ProfileModal';
 import apiService from '../services/api';
+// import StationCard from './user/StationCard';
+import BookingModal from './user/BookingModal';
+import { useToast } from './ui/Toast';
+import StationsTab from './user/StationsTab';
+import VehiclesTab from './user/VehiclesTab';
+import BookingsTab from './user/BookingsTab';
+import HistoryTab from './user/HistoryTab';
 
 function ChargeXUserDashboard({ onLogout }) {
+  const { theme, toggleTheme, themeType, isSystem } = useTheme();
+  const isDark = theme === 'dark';
+
   const [activeTab, setActiveTab] = useState('stations');
   const [stations, setStations] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -36,11 +47,20 @@ function ChargeXUserDashboard({ onLogout }) {
     estimatedCost: 0
   });
 
+  // Slots state: loaded when booking modal opens for a station
+  const [slotOptions, setSlotOptions] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotFetchError, setSlotFetchError] = useState(null);
+
+  // Toast (use global provider)
+  const toast = useToast();
+
   const [filters, setFilters] = useState({
     connectorType: 'all',
     availability: 'all',
     priceRange: [0, 100],
     rating: 0,
+    distance: 50,
     amenities: []
   });
 
@@ -73,6 +93,105 @@ function ChargeXUserDashboard({ onLogout }) {
     loadUserData();
     requestLocationPermission();
   }, []);
+
+  // Update booking names when stations/vehicles data is loaded
+  useEffect(() => {
+    if (bookings.length > 0 && stations.length > 0 && vehicles.length > 0) {
+      console.log('🔄 Updating booking names');
+      console.log('📊 Available stations:', stations.map(s => ({ id: s.id, name: s.name })));
+      console.log('🚗 Available vehicles:', vehicles.map(v => ({ id: v.id, name: `${v.brand} ${v.model}` })));
+
+      const updatedBookings = bookings.map(b => {
+        console.log('📋 Processing booking:', {
+          id: b.id,
+          station_id: b.station_id,
+          vehicle_id: b.vehicle_id,
+          current_station_name: b.station_name,
+          current_vehicle_name: b.vehicle_name
+        });
+
+        // Find station name from loaded stations data
+        let stationName = b.station_name || 'Unknown Station';
+        let stationAddress = b.station_address || 'Address not available';
+
+        if (b.station_id) {
+          const station = stations.find(s => {
+            const match = String(s.id) === String(b.station_id);
+            console.log(`🔍 Comparing station IDs: "${s.id}" === "${b.station_id}" => ${match}`);
+            return match;
+          });
+          if (station) {
+            stationName = station.name;
+            stationAddress = station.address;
+            console.log('✅ Found station:', stationName);
+          } else {
+            console.log('❌ Station not found for ID:', b.station_id);
+          }
+        }
+
+        // Find vehicle name from loaded vehicles data
+        let vehicleName = b.vehicle_name || 'Unknown Vehicle';
+
+        if (b.vehicle_id) {
+          const vehicle = vehicles.find(v => {
+            const match = String(v.id) === String(b.vehicle_id);
+            console.log(`🔍 Comparing vehicle IDs: "${v.id}" === "${b.vehicle_id}" => ${match}`);
+            return match;
+          });
+          if (vehicle) {
+            vehicleName = `${vehicle.brand} ${vehicle.model}`;
+            console.log('✅ Found vehicle:', vehicleName);
+          } else {
+            console.log('❌ Vehicle not found for ID:', b.vehicle_id);
+          }
+        }
+
+        // Format timestamps properly
+        const startTime = new Date(b.start_time);
+        const endTime = b.end_time ? new Date(b.end_time) : null;
+
+        return {
+          ...b,
+          station_name: stationName,
+          station_address: stationAddress,
+          vehicle_name: vehicleName,
+          booking_date: startTime.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          }),
+          time_slot: `${startTime.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          })}${endTime ? ` - ${endTime.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          })}` : ''}`,
+          formatted_start_time: startTime.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          }),
+          formatted_end_time: endTime ? endTime.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          }) : null
+        };
+      });
+
+      console.log('📝 Final updated bookings:', updatedBookings);
+      setBookings(updatedBookings);
+    }
+  }, [stations, vehicles]);
 
   // Update distances when both stations and user location are available
   useEffect(() => {
@@ -189,7 +308,7 @@ function ChargeXUserDashboard({ onLogout }) {
   // Get directions to station - only available after location permission is granted
   const getDirections = (station) => {
     if (locationPermission !== 'granted' || !userLocation) {
-      alert('Please enable location services first to get directions');
+      toast.error('Please enable location services first to get directions');
       return;
     }
 
@@ -232,6 +351,16 @@ function ChargeXUserDashboard({ onLogout }) {
         })));
       }
 
+      // Fetch user bookings (store raw data, transformation happens in useEffect)
+      const bookingsData = await apiService.getUserBookings();
+      console.log('Fetched bookings data:', bookingsData);
+      if (bookingsData && bookingsData.length > 0) {
+        setBookings(bookingsData); // Store raw booking data
+      } else {
+        console.log('No bookings data received');
+        setBookings([]);
+      }
+
       const stationsData = await apiService.getStations();
       if (stationsData && stationsData.length > 0) {
         const transformedStations = stationsData.map(s => ({
@@ -249,7 +378,7 @@ function ChargeXUserDashboard({ onLogout }) {
           amenities: s.amenities || [],
           lat: s.latitude,
           lng: s.longitude,
-          image: s.image || 'https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=400&h=300&fit=crop',
+          image: s.image || 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=400&h=300&fit=crop',
           isOpen: s.is_open !== false,
           openHours: s.open_hours || '24/7',
           photos: s.photos || []
@@ -301,6 +430,9 @@ function ChargeXUserDashboard({ onLogout }) {
       result = result.filter(station => station.rating >= filters.rating);
     }
 
+    // Distance filter - show stations within the specified distance
+    result = result.filter(station => station.distance <= filters.distance);
+
     if (sortBy === 'distance') {
       result.sort((a, b) => a.distance - b.distance);
     } else if (sortBy === 'price') {
@@ -311,6 +443,82 @@ function ChargeXUserDashboard({ onLogout }) {
 
     setFilteredStations(result);
   }, [searchQuery, filters, sortBy, stations]);
+
+  // Fetch slots for the selected station when booking modal opens or when date/time/duration changes
+  useEffect(() => {
+    const fetchSlotsAndFilter = async () => {
+      if (!showBookingModal || !selectedStation) return;
+      setSlotsLoading(true);
+      try {
+        const slotsResp = await apiService.getSlots(selectedStation.id);
+        const slots = slotsResp || [];
+        const bookingsResp = await apiService.getBookings();
+        const bookings = bookingsResp || [];
+        console.debug('Slots fetched', { station: selectedStation.id, count: slots.length });
+        console.debug('Bookings fetched', { station: selectedStation.id, count: bookings.length });
+
+        // Filter bookings for this station and sensible statuses
+        const stationBookings = bookings.filter(b => String(b.station_id) === String(selectedStation.id) && b.status !== 'rejected' && b.status !== 'cancelled');
+
+        const requestedStart = bookingData.timeSlot ? new Date(`${bookingData.date}T${bookingData.timeSlot}`) : null;
+        const requestedEnd = requestedStart ? new Date(requestedStart.getTime() + bookingData.duration * 60 * 60 * 1000) : null;
+
+        const rangesOverlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
+
+        const available = slots.filter(slot => {
+          // normalize common slot fields (some APIs return different shapes)
+          const slotId = slot.id || slot.slot_id || slot.slotId;
+          const status = slot.status || (slot.is_available === false ? 'unavailable' : 'available');
+          const is_available = typeof slot.is_available === 'boolean' ? slot.is_available : (slot.available !== undefined ? slot.available : true);
+
+          // Only consider slots that are marked available
+          if (String(status) !== 'available' || is_available === false) return false;
+
+          // If user hasn't chosen a time yet, include physically available slots
+          if (!requestedStart) return true;
+
+          // If any booking for this slot overlaps the requested range, mark as unavailable
+          const hasConflict = stationBookings.some(b => {
+            const bSlotId = b.slot_id || b.slotId || b.slot;
+            if (!bSlotId || String(bSlotId) !== String(slotId)) return false;
+            try {
+              const bStart = new Date(b.start_time || b.startTime);
+              const bEnd = new Date(b.end_time || b.endTime);
+              return rangesOverlap(requestedStart, requestedEnd, bStart, bEnd);
+            } catch (e) {
+              return false;
+            }
+          });
+
+          return !hasConflict;
+        }).map(s => {
+          const slotId = s.id || s.slot_id || s.slotId;
+          return {
+            id: String(slotId),
+            label: `${s.connector_type || s.connectorType || s.connector || 'Unknown'} - ${s.max_power_kw ? s.max_power_kw + ' kW' : (s.max_power || s.power || 'N/A')}`,
+            connectorType: s.connector_type || s.connectorType || s.connector || '',
+            raw: s
+          };
+        });
+
+        setSlotOptions(available);
+        setSlotFetchError(null);
+
+        // If current selected slot is no longer available, clear it
+        if (bookingData.slotId && !available.some(a => a.id === bookingData.slotId)) {
+          setBookingData(prev => ({ ...prev, slotId: null, connectorType: '' }));
+        }
+      } catch (e) {
+        console.error('Failed to load slots or bookings', e);
+        setSlotFetchError(e.message || String(e));
+        setSlotOptions([]);
+      } finally {
+        setSlotsLoading(false);
+      }
+    };
+
+    fetchSlotsAndFilter();
+  }, [showBookingModal, selectedStation, bookingData.date, bookingData.timeSlot, bookingData.duration]);
 
   const calculateEstimatedCost = (connector, duration) => {
     return connector.price * duration;
@@ -333,391 +541,7 @@ function ChargeXUserDashboard({ onLogout }) {
       <div className="text-white/80 text-sm">{subtitle}</div>
     </div>
   );
-
-  const StationCard = ({ station }) => {
-    const isFavorite = userProfile.favoriteStations.includes(station.id);
-    const primaryVehicle = vehicles.find(v => v.isPrimary);
-    const compatibleConnectors = station.connectorTypes.filter(c =>
-      !primaryVehicle || c.type === primaryVehicle.connectorType
-    );
-
-    return (
-      <div className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all overflow-hidden group">
-        <div className="relative">
-          <img
-            src={station.image}
-            alt={station.name}
-            className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-          <button className="absolute top-3 right-3 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors">
-            <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
-          </button>
-          <div className="absolute top-3 left-3 flex gap-2">
-            {station.isOpen ? (
-              <span className="px-3 py-1 bg-emerald-500 text-white text-xs font-semibold rounded-full">
-                Open Now
-              </span>
-            ) : (
-              <span className="px-3 py-1 bg-red-500 text-white text-xs font-semibold rounded-full">
-                Closed
-              </span>
-            )}
-            {station.availableSlots === 0 && station.isOpen && (
-              <span className="px-3 py-1 bg-orange-500 text-white text-xs font-semibold rounded-full">
-                Full
-              </span>
-            )}
-            {compatibleConnectors.length > 0 && (
-              <span className="px-3 py-1 bg-blue-500 text-white text-xs font-semibold rounded-full">
-                Compatible
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="p-5">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-gray-900 mb-1">{station.name}</h3>
-              <p className="text-sm text-gray-500 flex items-center gap-1">
-                <MapPin className="w-4 h-4" />
-                {station.address}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 mb-4">
-            <div className="flex items-center gap-1">
-              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              <span className="text-sm font-semibold text-gray-900">{station.rating || 'N/A'}</span>
-              <span className="text-sm text-gray-500">({station.reviews || 0})</span>
-            </div>
-            <div className="flex items-center gap-1 text-sm text-gray-600">
-              <Navigation className="w-4 h-4" />
-              {station.distance && station.distance > 0 ? `${station.distance} km` : 'Distance unavailable'}
-            </div>
-            <div className="flex items-center gap-1 text-sm text-gray-600">
-              <Clock className="w-4 h-4" />
-              {station.openHours || 'Hours unavailable'}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="flex items-center gap-2 text-sm">
-              <Battery className={`w-4 h-4 ${station.availableSlots > 0 ? 'text-emerald-600' : 'text-red-600'}`} />
-              <span className="text-gray-700">
-                {station.availableSlots} slot{station.availableSlots !== 1 ? 's' : ''} available
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <DollarSign className="w-4 h-4 text-gray-600" />
-              <span className="text-gray-700">
-                {station.connectorTypes && station.connectorTypes.length > 0
-                  ? `From ₹${Math.min(...station.connectorTypes.map(c => c.price || 0))}/hr`
-                  : 'Price unavailable'
-                }
-              </span>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <p className="text-xs text-gray-500 mb-2">Available Connectors:</p>
-            <div className="flex flex-wrap gap-2">
-              {station.connectorTypes && station.connectorTypes.length > 0 ? (
-                station.connectorTypes.map((connector, idx) => (
-                  <span
-                    key={idx}
-                    className={`px-2 py-1 text-xs font-medium rounded-lg ${
-                      compatibleConnectors.some(c => c.type === connector.type)
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    {connector.type} ({connector.power || 'N/A'})
-                  </span>
-                ))
-              ) : (
-                <span className="px-2 py-1 text-xs font-medium rounded-lg bg-gray-100 text-gray-700">
-                  No connectors available
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setSelectedStation(station);
-                setShowBookingModal(true);
-              }}
-              className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-2.5 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all"
-            >
-              Book Now
-            </button>
-            <button
-              onClick={() => getDirections(station)}
-              className="px-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
-              title="Get Directions"
-            >
-              <Navigation className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Modal Components
-  const BookingModal = () => {
-    if (!selectedStation) return null;
-
-    // Get available slots for this station (simplified - in real app would fetch from API)
-    const availableSlots = [
-      { id: 'slot-1', connectorType: 'CCS', power: '50kW' },
-      { id: 'slot-2', connectorType: 'Type 2', power: '22kW' },
-      { id: 'slot-3', connectorType: 'CHAdeMO', power: '100kW' }
-    ];
-
-    return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="p-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Book Charging Station</h2>
-              <button
-                onClick={() => {
-                  setSelectedStation(null);
-                  setShowBookingModal(false);
-                  setBookingData({
-                    stationId: null,
-                    vehicleId: null,
-                    slotId: null,
-                    connectorType: '',
-                    currentBattery: 50,
-                    date: new Date().toISOString().split('T')[0],
-                    timeSlot: '',
-                    duration: 2,
-                    estimatedCost: 0
-                  });
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{selectedStation.name}</h3>
-                <p className="text-gray-600">{selectedStation.address}</p>
-              </div>
-
-              {/* Current Battery Level */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Current Battery Level: {bookingData.currentBattery}%
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={bookingData.currentBattery}
-                  onChange={(e) => setBookingData({ ...bookingData, currentBattery: parseInt(e.target.value) })}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0%</span>
-                  <span>100%</span>
-                </div>
-              </div>
-
-              {/* Vehicle Selection */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Select Vehicle</label>
-                <select
-                  value={bookingData.vehicleId || ''}
-                  onChange={(e) => setBookingData({ ...bookingData, vehicleId: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="">Select a vehicle</option>
-                  {vehicles.map(vehicle => (
-                    <option key={vehicle.id} value={vehicle.id}>
-                      {vehicle.name} ({vehicle.connectorType})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Slot Selection */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Select Charging Slot</label>
-                <select
-                  value={bookingData.slotId || ''}
-                  onChange={(e) => {
-                    const selectedSlot = availableSlots.find(slot => slot.id === e.target.value);
-                    setBookingData({
-                      ...bookingData,
-                      slotId: e.target.value,
-                      connectorType: selectedSlot ? selectedSlot.connectorType : ''
-                    });
-                  }}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="">Select a slot</option>
-                  {availableSlots.map(slot => (
-                    <option key={slot.id} value={slot.id}>
-                      {slot.connectorType} - {slot.power}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-                  <input
-                    type="date"
-                    value={bookingData.date}
-                    onChange={(e) => setBookingData({ ...bookingData, date: e.target.value })}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Time Slot</label>
-                  <select
-                    value={bookingData.timeSlot}
-                    onChange={(e) => setBookingData({ ...bookingData, timeSlot: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="">Select time</option>
-                    <option value="09:00">09:00 AM</option>
-                    <option value="12:00">12:00 PM</option>
-                    <option value="15:00">03:00 PM</option>
-                    <option value="18:00">06:00 PM</option>
-                    <option value="21:00">09:00 PM</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Duration: {bookingData.duration} hours
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="8"
-                  value={bookingData.duration}
-                  onChange={(e) => setBookingData({ ...bookingData, duration: parseInt(e.target.value) })}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>1 hour</span>
-                  <span>8 hours</span>
-                </div>
-              </div>
-
-              {/* Booking Summary */}
-              {bookingData.vehicleId && bookingData.slotId && bookingData.timeSlot && (
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <h4 className="font-semibold text-gray-900 mb-2">Booking Summary</h4>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <p><strong>Vehicle:</strong> {vehicles.find(v => v.id === bookingData.vehicleId)?.name}</p>
-                    <p><strong>Connector:</strong> {bookingData.connectorType}</p>
-                    <p><strong>Date & Time:</strong> {bookingData.date} at {bookingData.timeSlot}</p>
-                    <p><strong>Duration:</strong> {bookingData.duration} hours</p>
-                    <p><strong>Current Battery:</strong> {bookingData.currentBattery}%</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={async () => {
-                    // Validation
-                    if (!bookingData.vehicleId) {
-                      alert('Please select a vehicle');
-                      return;
-                    }
-                    if (!bookingData.slotId) {
-                      alert('Please select a charging slot');
-                      return;
-                    }
-                    if (!bookingData.timeSlot) {
-                      alert('Please select a time slot');
-                      return;
-                    }
-
-                    try {
-                      // Calculate start and end times
-                      const startDateTime = new Date(`${bookingData.date}T${bookingData.timeSlot}`);
-                      const endDateTime = new Date(startDateTime.getTime() + bookingData.duration * 60 * 60 * 1000);
-
-                      // Create booking data according to actual database schema
-                      const bookingPayload = {
-                        vehicle_id: bookingData.vehicleId,
-                        station_id: selectedStation.id,
-                        start_time: startDateTime.toISOString(),
-                        end_time: endDateTime.toISOString(),
-                        status: 'pending'
-                      };
-
-                      // Call the API to create the booking
-                      console.log('Creating booking:', bookingPayload);
-                      const createdBooking = await apiService.createBooking(bookingPayload);
-
-                      console.log('Booking created successfully:', createdBooking);
-                      alert('Booking created successfully! Status: Pending');
-                      setSelectedStation(null);
-                      setShowBookingModal(false);
-                      setBookingData({
-                        stationId: null,
-                        vehicleId: null,
-                        slotId: null,
-                        connectorType: '',
-                        currentBattery: 50,
-                        date: new Date().toISOString().split('T')[0],
-                        timeSlot: '',
-                        duration: 2,
-                        estimatedCost: 0
-                      });
-                    } catch (error) {
-                      console.error('Error creating booking:', error);
-                      alert('Failed to create booking. Please try again.');
-                    }
-                  }}
-                  className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all"
-                >
-                  Create Booking
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedStation(null);
-                    setShowBookingModal(false);
-                    setBookingData({
-                      stationId: null,
-                      vehicleId: null,
-                      slotId: null,
-                      connectorType: '',
-                      currentBattery: 50,
-                      date: new Date().toISOString().split('T')[0],
-                      timeSlot: '',
-                      duration: 2,
-                      estimatedCost: 0
-                    });
-                  }}
-                  className="px-6 border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  
 
   const AddVehicleModal = () => {
     if (!showAddVehicle) return null;
@@ -855,7 +679,7 @@ function ChargeXUserDashboard({ onLogout }) {
                   type="button"
                   onClick={async () => {
                     if (!newVehicle.plateNumber || !newVehicle.vehicleType || !newVehicle.brand || !newVehicle.model) {
-                      alert('Please fill in all required fields');
+                      toast.error('Please fill in all required fields');
                       return;
                     }
 
@@ -887,10 +711,10 @@ function ChargeXUserDashboard({ onLogout }) {
                         image: 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=400&h=300&fit=crop'
                       }]);
                       setShowAddVehicle(false);
-                      alert('Vehicle added successfully!');
+                      toast.success('Vehicle added successfully!');
                     } catch (error) {
                       console.error('Error adding vehicle:', error);
-                      alert('Failed to add vehicle. Please try again.');
+                      toast.error('Failed to add vehicle. Please try again.');
                     }
                   }}
                   className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all"
@@ -1051,7 +875,7 @@ function ChargeXUserDashboard({ onLogout }) {
                   type="button"
                   onClick={async () => {
                     if (!editVehicle.plateNumber || !editVehicle.vehicleType || !editVehicle.brand || !editVehicle.model) {
-                      alert('Please fill in all required fields');
+                      toast.error('Please fill in all required fields');
                       return;
                     }
 
@@ -1085,10 +909,10 @@ function ChargeXUserDashboard({ onLogout }) {
                       ));
                       setShowEditVehicle(false);
                       setEditingVehicle(null);
-                      alert('Vehicle updated successfully!');
+                      toast.success('Vehicle updated successfully!');
                     } catch (error) {
                       console.error('Error updating vehicle:', error);
-                      alert('Failed to update vehicle. Please try again.');
+                      toast.error('Failed to update vehicle. Please try again.');
                     }
                   }}
                   className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all"
@@ -1208,6 +1032,25 @@ function ChargeXUserDashboard({ onLogout }) {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Maximum Distance: {filters.distance} km
+                </label>
+                <input
+                  type="range"
+                  min="5"
+                  max="200"
+                  step="5"
+                  value={filters.distance}
+                  onChange={(e) => setFilters({ ...filters, distance: parseInt(e.target.value) })}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>5 km</span>
+                  <span>200 km</span>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button
                   onClick={() => {
@@ -1216,6 +1059,7 @@ function ChargeXUserDashboard({ onLogout }) {
                       availability: 'all',
                       priceRange: [0, 100],
                       rating: 0,
+                      distance: 50,
                       amenities: []
                     });
                   }}
@@ -1338,23 +1182,23 @@ function ChargeXUserDashboard({ onLogout }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Sidebar */}
-      <aside className={`fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 p-6 z-40 transform transition-transform duration-300 ${
+      <aside className={`fixed left-0 top-0 h-screen w-64 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r p-6 z-40 transform transition-transform duration-300 ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}>
         <div className="flex items-center gap-3 mb-8">
           <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
             <Zap className="w-6 h-6 text-white" />
           </div>
-          <span className="text-xl font-bold text-gray-900">ChargeX</span>
+          <span className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>ChargeX</span>
         </div>
 
         <nav className="space-y-2">
           <button
             onClick={() => setActiveTab('stations')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
-              activeTab === 'stations' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              activeTab === 'stations' ? 'bg-emerald-600 text-white' : `${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`
             }`}
           >
             <MapPin className="w-5 h-5" />
@@ -1363,7 +1207,7 @@ function ChargeXUserDashboard({ onLogout }) {
           <button
             onClick={() => setActiveTab('vehicles')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
-              activeTab === 'vehicles' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              activeTab === 'vehicles' ? 'bg-emerald-600 text-white' : `${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`
             }`}
           >
             <Car className="w-5 h-5" />
@@ -1372,7 +1216,7 @@ function ChargeXUserDashboard({ onLogout }) {
           <button
             onClick={() => setActiveTab('bookings')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
-              activeTab === 'bookings' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              activeTab === 'bookings' ? 'bg-emerald-600 text-white' : `${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`
             }`}
           >
             <Calendar className="w-5 h-5" />
@@ -1381,13 +1225,13 @@ function ChargeXUserDashboard({ onLogout }) {
           <button
             onClick={() => setActiveTab('history')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
-              activeTab === 'history' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              activeTab === 'history' ? 'bg-emerald-600 text-white' : `${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`
             }`}
           >
             <History className="w-5 h-5" />
             History
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-100">
+          <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
             <CreditCard className="w-5 h-5" />
             Payments
           </button>
@@ -1396,21 +1240,21 @@ function ChargeXUserDashboard({ onLogout }) {
         <div className="absolute bottom-6 left-6 right-6 space-y-3">
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="w-full flex items-center gap-3 p-4 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors"
+            className={`w-full flex items-center gap-3 p-4 ${isDark ? 'bg-red-900/20 text-red-400 hover:bg-red-900/30' : 'bg-red-50 text-red-700 hover:bg-red-100'} rounded-xl transition-colors`}
           >
             <LogOut className="w-5 h-5" />
             <span className="font-medium">Logout</span>
           </button>
           <button
             onClick={() => setShowProfile(true)}
-            className="w-full flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+            className={`w-full flex items-center gap-3 p-4 ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-xl transition-colors`}
           >
             <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold">
               {userProfile.name[0]}
             </div>
             <div className="text-left flex-1">
-              <p className="text-sm font-semibold text-gray-900">{userProfile.name.split(' ')[0]}</p>
-              <p className="text-xs text-gray-500">View Profile</p>
+              <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{userProfile.name.split(' ')[0]}</p>
+              <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>View Profile</p>
             </div>
           </button>
         </div>
@@ -1421,556 +1265,77 @@ function ChargeXUserDashboard({ onLogout }) {
         {/* Mobile Menu Button */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-xl shadow-lg"
+          className={`lg:hidden fixed top-4 left-4 z-50 p-2 ${isDark ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg`}
         >
           {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
 
         {/* Stations Tab */}
         {activeTab === 'stations' && (
-          <>
-            {/* Stats Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <StatsCard
-                icon={Calendar}
-                title="Total Bookings"
-                value={userStats.totalBookings}
-                subtitle="Lifetime bookings"
-                color="from-blue-500 to-blue-600"
-              />
-              <StatsCard
-                icon={Zap}
-                title="Energy Used"
-                value={`${userStats.totalEnergy} kWh`}
-                subtitle="Total energy consumed"
-                color="from-purple-500 to-purple-600"
-              />
-              <StatsCard
-                icon={DollarSign}
-                title="Total Spent"
-                value={`₹${userStats.totalSpent}`}
-                subtitle="On charging"
-                color="from-orange-500 to-orange-600"
-              />
-              <StatsCard
-                icon={Leaf}
-                title="CO₂ Saved"
-                value={`${userStats.co2Saved} kg`}
-                subtitle="Environmental impact"
-                color="from-emerald-500 to-emerald-600"
-              />
-            </div>
-
-            {/* Header */}
-            <header className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">Find Charging Stations</h1>
-                  <p className="text-gray-600">Discover nearby EV charging stations and book your slot</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {locationPermission === 'granted' && userLocation && (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm">
-                      <Navigation className="w-4 h-4" />
-                      <span>Location enabled</span>
-                    </div>
-                  )}
-                  {locationPermission === 'denied' && (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-sm">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>Location disabled</span>
-                      <button
-                        onClick={requestLocationPermission}
-                        className="ml-2 px-2 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 transition-colors"
-                      >
-                        Enable
-                      </button>
-                    </div>
-                  )}
-                  {locationPermission === 'unknown' && (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 text-gray-700 rounded-lg text-sm">
-                      <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-                      <span>Getting location...</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </header>
-
-            {/* Search and Filters */}
-            <div className="bg-white rounded-2xl p-4 shadow-lg mb-8">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by name or location..."
-                    className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="distance">Sort by Distance</option>
-                    <option value="price">Sort by Price</option>
-                    <option value="rating">Sort by Rating</option>
-                  </select>
-                  <button
-                    onClick={() => setShowFilters(true)}
-                    className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors flex items-center gap-2"
-                  >
-                    <Filter className="w-5 h-5" />
-                    Filters
-                  </button>
-                </div>
-              </div>
-
-              {/* Active Filters */}
-              {(filters.connectorType !== 'all' || filters.availability !== 'all' || filters.rating > 0) && (
-                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-200">
-                  <span className="text-sm text-gray-600">Active filters:</span>
-                  {filters.connectorType !== 'all' && (
-                    <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-medium rounded-full flex items-center gap-1">
-                      {filters.connectorType}
-                      <button onClick={() => setFilters({ ...filters, connectorType: 'all' })}>
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  )}
-                  {filters.availability !== 'all' && (
-                    <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-medium rounded-full flex items-center gap-1">
-                      Available Only
-                      <button onClick={() => setFilters({ ...filters, availability: 'all' })}>
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  )}
-                  {filters.rating > 0 && (
-                    <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-medium rounded-full flex items-center gap-1">
-                      {filters.rating}+ Stars
-                      <button onClick={() => setFilters({ ...filters, rating: 0 })}>
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Results Count */}
-            <div className="flex items-center justify-between mb-6">
-              <p className="text-gray-600">
-                Found <span className="font-semibold text-gray-900">{filteredStations.length}</span> stations near you
-              </p>
-            </div>
-
-            {/* Stations Grid */}
-            {filteredStations.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertCircle className="w-10 h-10 text-gray-400" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">No stations found</h3>
-                <p className="text-gray-600 mb-6">Try adjusting your filters or search query</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredStations.map((station) => (
-                  <StationCard key={station.id} station={station} />
-                ))}
-              </div>
-            )}
-          </>
+          <StationsTab
+            stations={stations}
+            filteredStations={filteredStations}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            filters={filters}
+            setFilters={setFilters}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            userProfile={userProfile}
+            vehicles={vehicles}
+            onBookStation={(s) => { setSelectedStation(s); setShowBookingModal(true); }}
+            onGetDirections={getDirections}
+            locationPermission={locationPermission}
+            requestLocationPermission={requestLocationPermission}
+            darkMode={isDark}
+          />
         )}
 
         {/* Vehicles Tab */}
         {activeTab === 'vehicles' && (
-          <>
-            <header className="mb-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">My Vehicles</h1>
-                  <p className="text-gray-600">Manage your electric vehicles</p>
-                </div>
-                <button
-                  onClick={() => setShowAddVehicle(true)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/30"
-                >
-                  <Plus className="w-5 h-5" />
-                  Add Vehicle
-                </button>
-              </div>
-            </header>
-
-            {vehicles.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Car className="w-10 h-10 text-gray-400" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">No vehicles added</h3>
-                <p className="text-gray-600 mb-6">Add your first vehicle to get started</p>
-                <button
-                  onClick={() => setShowAddVehicle(true)}
-                  className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all"
-                >
-                  Add Your First Vehicle
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {vehicles.map((vehicle) => (
-                  <div key={vehicle.id} className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all">
-                    <img src={vehicle.image} alt={vehicle.name} className="w-full h-48 object-cover" />
-                    <div className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900 mb-1">{vehicle.name}</h3>
-                          <p className="text-sm text-gray-600">{vehicle.brand} • {vehicle.year}</p>
-                        </div>
-                        {vehicle.isPrimary && (
-                          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full">
-                            Primary
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="space-y-3 mb-4">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Plate Number</span>
-                          <span className="font-semibold text-gray-900">{vehicle.plateNumber || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Vehicle Type</span>
-                          <span className="font-semibold text-gray-900">{vehicle.vehicleType?.replace('_', ' ').toUpperCase() || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Color</span>
-                          <span className="font-semibold text-gray-900">{vehicle.color || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Connector Type</span>
-                          <span className="font-semibold text-gray-900">{vehicle.connectorType}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Battery Capacity</span>
-                          <span className="font-semibold text-gray-900">{vehicle.batteryCapacity ? `${vehicle.batteryCapacity} kWh` : 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Range</span>
-                          <span className="font-semibold text-gray-900">{vehicle.range ? `${vehicle.range} km` : 'N/A'}</span>
-                        </div>
-                        {vehicle.lastServiceDate && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">Last Service</span>
-                            <span className="font-semibold text-gray-900">{new Date(vehicle.lastServiceDate).toLocaleDateString()}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingVehicle(vehicle);
-                            setShowEditVehicle(true);
-                          }}
-                          className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-semibold hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (window.confirm(`Are you sure you want to delete ${vehicle.name}?`)) {
-                              try {
-                                await apiService.deleteVehicle(vehicle.id);
-                                setVehicles(vehicles.filter(v => v.id !== vehicle.id));
-                                alert('Vehicle deleted successfully!');
-                              } catch (error) {
-                                console.error('Error deleting vehicle:', error);
-                                alert('Failed to delete vehicle. Please try again.');
-                              }
-                            }
-                          }}
-                          className="px-4 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+          <VehiclesTab
+            vehicles={vehicles}
+            setVehicles={setVehicles}
+            toast={toast}
+            darkMode={isDark}
+          />
         )}
 
         {/* Bookings Tab */}
         {activeTab === 'bookings' && (
-          <>
-            <header className="mb-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">My Bookings</h1>
-                  <p className="text-gray-600">View and manage your charging reservations</p>
-                </div>
-              </div>
-            </header>
-
-            {bookings.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Calendar className="w-10 h-10 text-gray-400" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">No bookings found</h3>
-                <p className="text-gray-600 mb-6">You haven't made any charging reservations yet</p>
-                <button
-                  onClick={() => setActiveTab('stations')}
-                  className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all"
-                >
-                  Find Stations
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {bookings.map((booking) => (
-                  <div key={booking.id} className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all">
-                    <div className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-gray-900 mb-2">{booking.station_name}</h3>
-                          <p className="text-gray-600 flex items-center gap-2 mb-2">
-                            <MapPin className="w-4 h-4" />
-                            {booking.station_address}
-                          </p>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
-                              {new Date(booking.booking_date).toLocaleDateString()}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              {booking.time_slot}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Zap className="w-4 h-4" />
-                              {booking.connector_type}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className={`px-3 py-1 rounded-full text-sm font-semibold mb-2 ${
-                            booking.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
-                            booking.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                            booking.status === 'completed' ? 'bg-blue-100 text-blue-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                          </div>
-                          <p className="text-2xl font-bold text-emerald-600">₹{booking.total_cost}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                        <div className="flex items-center gap-2">
-                          <Car className="w-5 h-5 text-gray-600" />
-                          <span className="text-sm text-gray-600">{booking.vehicle_name}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          {booking.status === 'pending' && (
-                            <>
-                              <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors">
-                                Confirm
-                              </button>
-                              <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors">
-                                Cancel
-                              </button>
-                            </>
-                          )}
-                          {booking.status === 'confirmed' && (
-                            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                              View Details
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+          <BookingsTab
+            bookings={bookings}
+            setActiveTab={setActiveTab}
+            darkMode={isDark}
+          />
         )}
 
         {/* History Tab */}
         {activeTab === 'history' && (
-          <>
-            <header className="mb-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">Charging History</h1>
-                  <p className="text-gray-600">View your past charging sessions and usage statistics</p>
-                </div>
-                <div className="flex gap-2">
-                  <select className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    <option value="all">All Time</option>
-                    <option value="month">This Month</option>
-                    <option value="week">This Week</option>
-                    <option value="today">Today</option>
-                  </select>
-                </div>
-              </div>
-            </header>
-
-            {/* History Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white rounded-2xl p-6 shadow-lg">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Zap className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Sessions</p>
-                    <p className="text-2xl font-bold text-gray-900">{bookingHistory.length}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-6 shadow-lg">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                    <Battery className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Energy Used</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {bookingHistory.reduce((sum, session) => sum + (session.energy_used || 0), 0).toFixed(1)} kWh
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-6 shadow-lg">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Cost</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      ₹{bookingHistory.reduce((sum, session) => sum + (session.cost || 0), 0).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-6 shadow-lg">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Leaf className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">CO₂ Saved</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {(bookingHistory.reduce((sum, session) => sum + (session.energy_used || 0), 0) * 0.4).toFixed(1)} kg
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {bookingHistory.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <History className="w-10 h-10 text-gray-400" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">No charging history</h3>
-                <p className="text-gray-600 mb-6">Your completed charging sessions will appear here</p>
-                <button
-                  onClick={() => setActiveTab('stations')}
-                  className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all"
-                >
-                  Start Charging
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {bookingHistory.map((session) => (
-                  <div key={session.id} className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all">
-                    <div className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-gray-900 mb-2">{session.station_name}</h3>
-                          <p className="text-gray-600 flex items-center gap-2 mb-2">
-                            <MapPin className="w-4 h-4" />
-                            {session.station_address}
-                          </p>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
-                              {new Date(session.session_date).toLocaleDateString()}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              {session.start_time} - {session.end_time}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Zap className="w-4 h-4" />
-                              {session.connector_type}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold mb-2">
-                            Completed
-                          </div>
-                          <p className="text-2xl font-bold text-emerald-600">₹{session.cost}</p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-blue-600">{session.energy_used} kWh</p>
-                          <p className="text-sm text-gray-600">Energy Used</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-purple-600">{session.duration}h</p>
-                          <p className="text-sm text-gray-600">Duration</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-green-600">
-                            {(session.energy_used * 0.4).toFixed(1)} kg
-                          </p>
-                          <p className="text-sm text-gray-600">CO₂ Saved</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-200 mt-4">
-                        <div className="flex items-center gap-2">
-                          <Car className="w-5 h-5 text-gray-600" />
-                          <span className="text-sm text-gray-600">{session.vehicle_name}</span>
-                        </div>
-                        <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors">
-                          View Receipt
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+          <HistoryTab
+            bookingHistory={bookingHistory}
+            setActiveTab={setActiveTab}
+            darkMode={isDark}
+          />
         )}
       </main>
 
-      <BookingModal />
+      <BookingModal
+        selectedStation={selectedStation}
+        bookingData={bookingData}
+        setBookingData={setBookingData}
+        setSelectedStation={setSelectedStation}
+        setShowBookingModal={setShowBookingModal}
+        vehicles={vehicles}
+        slotOptions={slotOptions}
+        slotsLoading={slotsLoading}
+        slotFetchError={slotFetchError}
+      />
       <AddVehicleModal />
       <EditVehicleModal />
       <FilterPanel />
+
+  {/* toasts provided by ToastProvider at App root */}
       <MapModal />
       <ProfileModal
         showProfileModal={showProfile}

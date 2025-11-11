@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 import httpx
 from ..database import get_supabase_client, get_supabase_service_role_client
+from ..crud.profiles import get_user_profile
 from fastapi import HTTPException
 
 async def get_station_manager(manager_id: UUID) -> Optional[Dict[str, Any]]:
@@ -256,15 +257,68 @@ async def get_manager_bookings(manager_id: str) -> List[Dict[str, Any]]:
     try:
         supabase = await get_supabase_client()
         # First get the station IDs managed by this manager
-        stations_response = supabase.table("stations").select("id").eq("station_manager", manager_id).execute()
-        station_ids = [station["id"] for station in (stations_response.data or [])]
+        stations_response = supabase.table("stations").select("id, name").eq("station_manager", manager_id).execute()
+        stations = stations_response.data or []
+        station_ids = [station["id"] for station in stations]
+        station_map = {station["id"]: station["name"] for station in stations}
 
         if not station_ids:
             return []
 
-        # Get bookings for these stations
-        bookings_response = supabase.table("bookings").select("*").in_("station_id", station_ids).execute()
-        return bookings_response.data or []
+        # Get bookings for these stations with slot information
+        bookings_response = supabase.table("bookings").select("""
+            *,
+            charging_slots!bookings_slot_id_fkey(charger_type, connector_type)
+        """).in_("station_id", station_ids).execute()
+        bookings = bookings_response.data or []
+
+        # Get unique user IDs from bookings
+        user_ids = list(set(booking["user_id"] for booking in bookings if booking.get("user_id")))
+
+        # Fetch user profiles for all users in the bookings
+        user_profiles = {}
+        if user_ids:
+            for user_id in user_ids:
+                try:
+                    profile = await get_user_profile(UUID(user_id))
+                    if profile:
+                        user_profiles[user_id] = profile
+                except Exception as e:
+                    print(f"Error fetching profile for user {user_id}: {e}")
+
+        # Process the bookings to add user, station, and slot info
+        processed_bookings = []
+        for booking in bookings:
+            processed_booking = dict(booking)
+
+            # Add user info
+            user_id = booking.get("user_id")
+            if user_id and user_id in user_profiles:
+                profile = user_profiles[user_id]
+                processed_booking["user_name"] = profile.name or profile.email or user_id
+                processed_booking["user_email"] = profile.email or user_id
+            else:
+                processed_booking["user_name"] = user_id
+                processed_booking["user_email"] = user_id
+
+            # Add station info
+            station_id = booking.get("station_id")
+            processed_booking["station_name"] = station_map.get(station_id, station_id)
+
+            # Add slot info
+            if booking.get("charging_slots"):
+                slot_info = booking["charging_slots"]
+                processed_booking["slot_type"] = slot_info.get("charger_type", "Unknown")
+                processed_booking["connector_type"] = slot_info.get("connector_type", "Unknown")
+                processed_booking["slot_display"] = f"{slot_info.get('charger_type', 'Unknown')} - {slot_info.get('connector_type', 'Unknown')}"
+            else:
+                processed_booking["slot_type"] = "Unknown"
+                processed_booking["connector_type"] = "Unknown"
+                processed_booking["slot_display"] = f"Slot {booking.get('slot_id', 'N/A')}"
+
+            processed_bookings.append(processed_booking)
+
+        return processed_bookings
     except httpx.HTTPError as e:
         print(f"Error fetching bookings for manager {manager_id}: {e}")
         return []

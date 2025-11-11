@@ -17,6 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 import logging
+import asyncio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +39,7 @@ from .routers import (
     analytics
 )
 from .database import init_db
+from .crud.bookings import complete_expired_bookings, activate_started_bookings
 
 load_dotenv()
 
@@ -143,13 +145,52 @@ app.include_router(activity.router)
 app.include_router(admin.router)
 app.include_router(analytics.router)
 
+async def activate_started_bookings_task():
+    """Background task to activate started bookings every minute."""
+    while True:
+        try:
+            logger.info("🔄 Running automatic booking activation check...")
+            result = await activate_started_bookings()
+            if result.get("updated_count", 0) > 0:
+                logger.info(f"✅ Activated {result['updated_count']} started bookings")
+            else:
+                logger.debug("ℹ️  No bookings to activate")
+        except Exception as e:
+            logger.error(f"❌ Error in automatic booking activation: {e}")
+
+        # Wait 1 minute before next check
+        await asyncio.sleep(60)  # 1 minute = 60 seconds
+
+
+async def complete_expired_bookings_task():
+    """Background task to complete expired bookings every 5 minutes."""
+    while True:
+        try:
+            logger.info("🔄 Running automatic booking completion check...")
+            result = await complete_expired_bookings()
+            if result.get("updated_count", 0) > 0:
+                logger.info(f"✅ Completed {result['updated_count']} expired bookings")
+            else:
+                logger.debug("ℹ️  No expired bookings to complete")
+        except Exception as e:
+            logger.error(f"❌ Error in automatic booking completion: {e}")
+
+        # Wait 5 minutes before next check
+        await asyncio.sleep(300)  # 5 minutes = 300 seconds
+
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     """
-    Initialize database and any other startup tasks
+    Initialize database and start background tasks
     """
     init_db()
-    print("✅ Database initialized and FastAPI startup complete.")
+    print("✅ Database initialized")
+
+    # Start background tasks for booking lifecycle management
+    asyncio.create_task(activate_started_bookings_task())
+    asyncio.create_task(complete_expired_bookings_task())
+    print("✅ Automatic booking lifecycle tasks started")
+    print("🚀 FastAPI startup complete")
 
 @app.get("/")
 def root():

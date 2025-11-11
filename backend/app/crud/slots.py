@@ -71,10 +71,12 @@ async def update_slot(slot_id: UUID, update_data: Dict[str, Any]) -> Optional[Di
         return None
 
 async def list_slots(station_ids: List[UUID]) -> List[Dict[str, Any]]:
-    if not station_ids:
-        return []
+    # If station_ids is empty, return all slots (router treats empty list as "all slots")
     try:
         supabase = await get_supabase_client()
+        if not station_ids:
+            response = supabase.table("charging_slots").select("*").execute()
+            return response.data or []
         response =  supabase.table("charging_slots").select("*").in_("station_id", [str(s) for s in station_ids]).execute()
         return response.data or []
     except httpx.HTTPError as e:

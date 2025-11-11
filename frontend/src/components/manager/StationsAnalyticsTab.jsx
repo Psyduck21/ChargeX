@@ -147,8 +147,13 @@ export default function StationsAnalyticsTab({
 
   return (
     <div className="space-y-6">
+      {/* Header Controls */} 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div>
+          <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Station Analytics</h3>
+          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Detailed analytics and performance metrics</p>
+        </div>
+        <div className="flex items-center gap-3">
           {/* Station Selector */}
           <div className="flex items-center gap-2">
             <Filter className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
@@ -158,7 +163,7 @@ export default function StationsAnalyticsTab({
                 const station = stations.find(s => s.id === e.target.value);
                 setSelectedStation(station);
               }}
-              className={`px-4 py-2 border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'} rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+              className={`px-4 py-2.5 border ${darkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200'} rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm`}
             >
               {stations.map(station => (
                 <option key={station.id} value={station.id}>
@@ -172,7 +177,7 @@ export default function StationsAnalyticsTab({
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
-            className={`px-4 py-2 border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'} rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+            className={`px-4 py-2.5 border ${darkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200'} rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm`}
           >
             <option value="7d">Last 7 days</option>
             <option value="30d">Last 30 days</option>
@@ -183,13 +188,13 @@ export default function StationsAnalyticsTab({
 
       {/* Station Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 border`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-              <MapPin className="w-6 h-6 text-emerald-600" />
+        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-4 md:p-6 border`}>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+              <MapPin className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Total Slots</p>
+              <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Total Slots</p>
               <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 {selectedStation.capacity || 0}
               </p>
@@ -197,13 +202,13 @@ export default function StationsAnalyticsTab({
           </div>
         </div>
 
-        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 border`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Activity className="w-6 h-6 text-blue-600" />
+        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-4 md:p-6 border`}>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center">
+              <Activity className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Available Slots</p>
+              <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Available Slots</p>
               <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 {stationAnalytics.availableSlotsCount || 0}
               </p>
@@ -211,13 +216,13 @@ export default function StationsAnalyticsTab({
           </div>
         </div>
 
-        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 border`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-purple-600" />
+        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-4 md:p-6 border`}>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center">
+              <DollarSign className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Total Revenue</p>
+              <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Total Revenue</p>
               <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 ₹{stationAnalytics.revenueData?.reduce((sum, item) => sum + (item.revenue || 0), 0)?.toLocaleString() || '0'}
               </p>
@@ -225,13 +230,13 @@ export default function StationsAnalyticsTab({
           </div>
         </div>
 
-        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 border`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-              <Zap className="w-6 h-6 text-orange-600" />
+        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-4 md:p-6 border`}>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center">
+              <Zap className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Energy Delivered</p>
+              <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Energy Delivered</p>
               <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 {stationAnalytics.energyData?.reduce((sum, item) => sum + (item.energy || 0), 0)?.toFixed(1) || '0'} kWh
               </p>
