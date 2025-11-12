@@ -659,6 +659,7 @@ export default function EVChargingLanding({ onSwitchToLogin, onSwitchToSignup, o
             setShowSignup(false);
             setShowLogin(true);
           }}
+          onSignupSuccess={onLoggedIn}
         />
       )}
 

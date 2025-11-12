@@ -69,10 +69,9 @@ export default function StationCard({ station, userProfile = { favoriteStations:
             </span>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <DollarSign className="w-4 h-4 text-gray-600" />
             <span className="text-gray-700">
               {station.connectorTypes && station.connectorTypes.length > 0
-                ? `From ₹${Math.min(...station.connectorTypes.map(c => c.price || 0))}/hr`
+                ? `From ₹${Math.min(...station.connectorTypes.map(c => c.price || 10))}/hr`
                 : 'Price unavailable'
               }
             </span>
