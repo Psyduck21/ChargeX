@@ -382,7 +382,7 @@ async def get_charging_type_distribution(days: int = 30, station_ids: List[str] 
         start_date = end_date - timedelta(days=days)
 
         # Build query for charging sessions
-        query = supabase.table("charging_sessions").select("slot").gte("start_time", start_date.isoformat())
+        query = supabase.table("charging_sessions").select("slot_id").gte("start_time", start_date.isoformat())
 
         # Filter by station_ids if provided (for station managers)
         if station_ids:
