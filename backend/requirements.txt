@@ -1,6 +1,6 @@
 supabase
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
 pydantic
 pydantic[email]
