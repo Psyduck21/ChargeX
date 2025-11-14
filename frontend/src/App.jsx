@@ -73,6 +73,7 @@ function AppContent() {
               throw error;
             }
           }}
+          onClose={() => setView('landing')}
         />
       )}
       {view === 'signup' && (

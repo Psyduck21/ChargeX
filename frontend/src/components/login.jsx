@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, X } from 'lucide-react';
 import apiService from '../services/api.js';
 
-export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
+export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn, onClose }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -50,7 +50,7 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
       <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl animate-slideUp">
         <div className="relative p-8">
           <button
-            onClick={() => window.history.back()}
+            onClick={onClose}
             className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
             <X className="w-5 h-5" />
@@ -102,11 +102,21 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              {error && (
+                <div className="text-red-500 text-sm mt-2">
+                  {error}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between">
               <label className="flex items-center">
-                <input type="checkbox" className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500" />
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                />
                 <span className="ml-2 text-sm text-gray-600">Remember me</span>
               </label>
               <a href="#" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
@@ -116,9 +126,10 @@ export default function ProfessionalLogin({ onSwitchToSignup, onLoggedIn }) {
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all transform hover:scale-[1.02] shadow-lg shadow-emerald-500/30"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all transform hover:scale-[1.02] shadow-lg shadow-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              Sign In
+              {loading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
 

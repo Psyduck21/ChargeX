@@ -34,22 +34,48 @@ async def get_user_growth_analytics(days: int = 30, current_user: dict = Depends
 
 
 @router.get("/energy-consumption", response_model=List[Dict[str, Any]], dependencies=[Depends(require_admin_or_manager)])
-async def get_energy_consumption_analytics(days: int = 30, current_user: dict = Depends(get_current_user)):
+async def get_energy_consumption_analytics(days: int = 30, station_id: str = None, current_user: dict = Depends(get_current_user)):
     """Get energy consumption trends for charts"""
     if days < 1 or days > 365:
         raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
-    station_ids = current_user.get("station_ids", []) if current_user.get("role") == "station_manager" else None
+
+    # For station managers, validate access to requested station
+    if current_user.get("role") == "station_manager":
+        manager_station_ids = current_user.get("station_ids", [])
+        if station_id:
+            if station_id not in manager_station_ids:
+                raise HTTPException(status_code=403, detail="Access denied to this station")
+            station_ids = [station_id]
+        else:
+            station_ids = manager_station_ids
+    else:
+        # Admins can filter by specific station or see all
+        station_ids = [station_id] if station_id else None
+
     consumption = await get_energy_consumption_trends(days, station_ids)
 
     return consumption
 
 
 @router.get("/revenue", response_model=List[Dict[str, Any]], dependencies=[Depends(require_admin_or_manager)])
-async def get_revenue_analytics(days: int = 30, current_user: dict = Depends(get_current_user)):
+async def get_revenue_analytics(days: int = 30, station_id: str = None, current_user: dict = Depends(get_current_user)):
     """Get revenue trends for charts"""
     if days < 1 or days > 365:
         raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
-    station_ids = current_user.get("station_ids", []) if current_user.get("role") == "station_manager" else None
+
+    # For station managers, validate access to requested station
+    if current_user.get("role") == "station_manager":
+        manager_station_ids = current_user.get("station_ids", [])
+        if station_id:
+            if station_id not in manager_station_ids:
+                raise HTTPException(status_code=403, detail="Access denied to this station")
+            station_ids = [station_id]
+        else:
+            station_ids = manager_station_ids
+    else:
+        # Admins can filter by specific station or see all
+        station_ids = [station_id] if station_id else None
+
     revenue = await get_revenue_trends(days, station_ids)
 
     return revenue
@@ -74,11 +100,24 @@ async def get_station_utilization_analytics(current_user: dict = Depends(get_cur
 
 
 @router.get("/charging-types", response_model=List[Dict[str, Any]], dependencies=[Depends(require_admin_or_manager)])
-async def get_charging_types_analytics(days: int = 30, current_user: dict = Depends(get_current_user)):
+async def get_charging_types_analytics(days: int = 30, station_id: str = None, current_user: dict = Depends(get_current_user)):
     """Get charging type distribution for charts"""
     if days < 1 or days > 365:
         raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
-    station_ids = current_user.get("station_ids", []) if current_user.get("role") == "station_manager" else None
+
+    # For station managers, validate access to requested station
+    if current_user.get("role") == "station_manager":
+        manager_station_ids = current_user.get("station_ids", [])
+        if station_id:
+            if station_id not in manager_station_ids:
+                raise HTTPException(status_code=403, detail="Access denied to this station")
+            station_ids = [station_id]
+        else:
+            station_ids = manager_station_ids
+    else:
+        # Admins can filter by specific station or see all
+        station_ids = [station_id] if station_id else None
+
     types = await get_charging_type_distribution(days, station_ids)
 
     return types

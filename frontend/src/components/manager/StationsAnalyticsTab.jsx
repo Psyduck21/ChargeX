@@ -34,22 +34,15 @@ export default function StationsAnalyticsTab({
       const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
 
       const [energyTrend, revenueTrend, chargerTypes, slots] = await Promise.all([
-        apiService.getEnergyConsumptionAnalytics(days),
-        apiService.getRevenueAnalytics(days),
-        apiService.getChargingTypeAnalytics(days),
+        apiService.getEnergyConsumptionAnalytics(days, stationId),
+        apiService.getRevenueAnalytics(days, stationId),
+        apiService.getChargingTypeAnalytics(days, stationId),
         apiService.getSlots(stationId)
       ]);
 
-      // Filter data for this station only
-      const stationEnergy = (energyTrend || []).filter(item => {
-        // Since we can't filter by station in the current API, we'll show all data
-        // In a real implementation, you'd modify the API to accept station_id
-        return true;
-      });
-
-      const stationRevenue = (revenueTrend || []).filter(item => {
-        return true;
-      });
+      // Data is now already filtered by station in the API
+      const stationEnergy = energyTrend || [];
+      const stationRevenue = revenueTrend || [];
 
       // Process data for charts
       const processedEnergy = stationEnergy.map(item => ({

@@ -650,6 +650,7 @@ export default function EVChargingLanding({ onSwitchToLogin, onSwitchToSignup, o
             setShowLogin(false);
             await onLoggedIn(data);
           }}
+          onClose={() => setShowLogin(false)}
         />
       )}
 

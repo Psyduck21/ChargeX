@@ -158,7 +158,7 @@ class ApiService {
         } finally {
             localStorage.removeItem('access_token');
             localStorage.removeItem('user_role');
-            window.location.href = "/login";
+            window.location.href = "/";
         }
     }
 
@@ -295,12 +295,16 @@ class ApiService {
     return this.apiCall(`/analytics/user-growth?days=${days}`);
   }
 
-  async getEnergyConsumptionAnalytics(days = 30) {
-    return this.apiCall(`/analytics/energy-consumption?days=${days}`);
+  async getEnergyConsumptionAnalytics(days = 30, stationId = null) {
+    const params = new URLSearchParams({ days: days.toString() });
+    if (stationId) params.append('station_id', stationId);
+    return this.apiCall(`/analytics/energy-consumption?${params.toString()}`);
   }
 
-  async getRevenueAnalytics(days = 30) {
-    return this.apiCall(`/analytics/revenue?days=${days}`);
+  async getRevenueAnalytics(days = 30, stationId = null) {
+    const params = new URLSearchParams({ days: days.toString() });
+    if (stationId) params.append('station_id', stationId);
+    return this.apiCall(`/analytics/revenue?${params.toString()}`);
   }
 
   async getBookingsAnalytics(days = 30) {
@@ -311,8 +315,10 @@ class ApiService {
     return this.apiCall('/analytics/station-utilization');
   }
 
-  async getChargingTypeAnalytics(days = 30) {
-    return this.apiCall(`/analytics/charging-types?days=${days}`);
+  async getChargingTypeAnalytics(days = 30, stationId = null) {
+    const params = new URLSearchParams({ days: days.toString() });
+    if (stationId) params.append('station_id', stationId);
+    return this.apiCall(`/analytics/charging-types?${params.toString()}`);
   }
 
   async getPeakHoursAnalytics(hours = 24) {
