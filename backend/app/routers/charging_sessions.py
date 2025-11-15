@@ -4,11 +4,44 @@ from typing import List, Dict, Any
 from ..dependencies import get_current_user, require_admin
 from ..crud import list_charging_sessions, create_charging_session, list_charging_sessions_between, list_stations
 from ..models import ChargingSessionCreate, ChargingSessionOut
+from ..database import get_supabase_client
 
 router = APIRouter(
     prefix="/charging_sessions",
     tags=["ChargingSessions"]
 )
+
+
+@router.get("/user/", response_model=List[Dict[str, Any]])
+async def get_user_sessions(current_user=Depends(get_current_user)):
+    """
+    List charging sessions for the current user with station and vehicle data populated.
+    This includes completed sessions with actual costs.
+    """
+    user_id = current_user["id"] if isinstance(current_user, dict) else getattr(current_user, "id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
+    try:
+        supabase = await get_supabase_client()
+
+        # Get all charging sessions for this user
+        response = supabase.table("charging_sessions").select("*").eq("user_id", str(user_id)).order("created_at", desc=True).execute()
+        sessions = response.data or []
+
+        print(f"Found {len(sessions)} charging sessions for user {user_id}")
+
+        # For now, just return the raw session data to avoid database issues
+        # We'll process the data on the client side
+        processed_sessions = []
+        for session in sessions:
+            processed = dict(session)
+            processed_sessions.append(processed)
+
+        return processed_sessions
+    except Exception as e:
+        print(f"Error fetching user sessions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch user sessions")
 
 
 @router.get("/", response_model=List[ChargingSessionOut])

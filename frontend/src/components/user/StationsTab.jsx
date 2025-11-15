@@ -176,45 +176,6 @@ function StationsTab({
 
   return (
     <>
-      {/* Stats Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white transform hover:scale-105 transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <Calendar className="w-8 h-8" />
-            <span className="text-white/80 text-sm">Total Bookings</span>
-          </div>
-          <div className="text-3xl font-bold mb-1">{userProfile.totalBookings || 0}</div>
-          <div className="text-white/80 text-sm">Lifetime bookings</div>
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white transform hover:scale-105 transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <Zap className="w-8 h-8" />
-            <span className="text-white/80 text-sm">Energy Used</span>
-          </div>
-          <div className="text-3xl font-bold mb-1">{userStats.totalEnergy} kWh</div>
-          <div className="text-white/80 text-sm">Total energy consumed</div>
-        </div>
-
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 text-white transform hover:scale-105 transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <DollarSign className="w-8 h-8" />
-            <span className="text-white/80 text-sm">Total Spent</span>
-          </div>
-          <div className="text-3xl font-bold mb-1">₹{userStats.totalSpent}</div>
-          <div className="text-white/80 text-sm">On charging</div>
-        </div>
-
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 text-white transform hover:scale-105 transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <Leaf className="w-8 h-8" />
-            <span className="text-white/80 text-sm">CO₂ Saved</span>
-          </div>
-          <div className="text-3xl font-bold mb-1">{userStats.co2Saved}</div>
-          <div className="text-white/80 text-sm">Environmental impact</div>
-        </div>
-      </div>
-
       {/* Header */}
       <header className="mb-8">
         <div className="flex items-center justify-between mb-4">

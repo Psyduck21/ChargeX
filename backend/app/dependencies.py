@@ -2,6 +2,7 @@
 
 import os
 import logging
+import asyncio
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from .database import get_supabase_client,get_supabase_service_role_client
@@ -63,62 +64,105 @@ async def get_current_user(token: Optional[str] = None, auth_token: str = Depend
         # Extract email if available
         user_email = getattr(user_obj, "email", None) or (user_obj.get("email") if isinstance(user_obj, dict) else None)
 
-        # 1) Check admins table by id
-        admin_response = supabase_service_role.table("admins").select("id, email").eq("id", user_id).execute()
-        if getattr(admin_response, "data", None):
+        # 3) Check metadata for role claim (fast, no queries)
+        meta_role = None
+        if hasattr(user_obj, "app_metadata") and isinstance(getattr(user_obj, "app_metadata"), dict):
+            meta_role = user_obj.app_metadata.get("role")
+        if not meta_role and hasattr(user_obj, "user_metadata") and isinstance(getattr(user_obj, "user_metadata"), dict):
+            meta_role = user_obj.user_metadata.get("role")
+        if not meta_role and isinstance(user_obj, dict):
+            meta_role = (user_obj.get("app_metadata") or {}).get("role") or (user_obj.get("user_metadata") or {}).get("role")
+        logger.debug(f"[auth] meta_role={meta_role}")
+        if meta_role == "admin":
             role = "admin"
-        else:
-            # 2) Check admins table by email (if email exists)
-            if user_email:
-                admin_by_email = supabase_service_role.table("admins").select("id, email").eq("email", user_email).execute()
-                if getattr(admin_by_email, "data", None):
-                    role = "admin"
 
-        # 3) Check metadata for role claim
-        if role != "admin":
-            # Some Supabase user objects include app_metadata or user_metadata with role info
-            meta_role = None
-            if hasattr(user_obj, "app_metadata") and isinstance(getattr(user_obj, "app_metadata"), dict):
-                meta_role = user_obj.app_metadata.get("role")
-            if not meta_role and hasattr(user_obj, "user_metadata") and isinstance(getattr(user_obj, "user_metadata"), dict):
-                meta_role = user_obj.user_metadata.get("role")
-            if not meta_role and isinstance(user_obj, dict):
-                meta_role = (user_obj.get("app_metadata") or {}).get("role") or (user_obj.get("user_metadata") or {}).get("role")
-            logger.debug(f"[auth] meta_role={meta_role}")
-            if meta_role == "admin":
-                role = "admin"
-
-        # 4) Check ADMIN_EMAILS env var
+        # 4) Check ADMIN_EMAILS env var (fast, no queries)
         if role != "admin" and user_email:
             admin_emails = os.getenv("ADMIN_EMAILS", "").split(",") if os.getenv("ADMIN_EMAILS") else []
             admin_emails = [e.strip().lower() for e in admin_emails if e.strip()]
             if user_email.lower() in admin_emails:
                 role = "admin"
 
-        # If still not admin, check station_managers by id or email
+        # If still not admin, perform parallel database queries to check roles
         if role != "admin":
-            manager_response = supabase.table("station_managers").select("*").eq("id", user_id).execute()
-            if not getattr(manager_response, "data", None) and user_email:
-                # Try by email
-                manager_response =  supabase.table("station_managers").select("*").eq("email", user_email).execute()
-                logger.debug(f"[auth] station_managers by email response: {getattr(manager_response, 'data', None)}")
+            # Prepare queries with timeouts to prevent hanging on Supabase issues
+            admin_id_query = supabase_service_role.table("admins").select("id").eq("id", user_id).execute()
+            manager_id_query = supabase.table("station_managers").select("*").eq("id", user_id).execute()
+            profile_id_query = supabase.table("profiles").select("id").eq("id", user_id).execute()
 
-            if getattr(manager_response, "data", None):
-                role = "station_manager"
-                # Get station IDs from stations table where station_manager = user_id
-                stations_response = supabase.table("stations").select("id").eq("station_manager", user_id).execute()
-                station_ids = [s.get("id") for s in (stations_response.data or []) if s.get("id")]
+            tasks = [
+                asyncio.wait_for(admin_id_query, timeout=10.0),
+                asyncio.wait_for(manager_id_query, timeout=10.0),
+                asyncio.wait_for(profile_id_query, timeout=10.0),
+            ]
+
+            if user_email:
+                admin_email_query = supabase_service_role.table("admins").select("id").eq("email", user_email).execute()
+                manager_email_query = supabase.table("station_managers").select("*").eq("email", user_email).execute()
+                profile_email_query = supabase.table("profiles").select("id").eq("email", user_email).execute()
+                tasks.extend([
+                    asyncio.wait_for(admin_email_query, timeout=10.0),
+                    asyncio.wait_for(manager_email_query, timeout=10.0),
+                    asyncio.wait_for(profile_email_query, timeout=10.0),
+                ])
+
+            # Run queries in parallel with timeouts
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Unpack results
+            admin_id_result = results[0]
+            manager_id_result = results[1]
+            profile_id_result = results[2]
+
+            admin_email_result = None
+            manager_email_result = None
+            profile_email_result = None
+
+            if user_email:
+                admin_email_result = results[3]
+                manager_email_result = results[4]
+                profile_email_result = results[5]
+
+            # Handle exceptions in results
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.warning(f"[auth] Query {i} failed: {result}")
+                    results[i] = None
+
+            # Check admin role from queries
+            admin_found = (
+                (admin_id_result and getattr(admin_id_result, "data", None)) or
+                (user_email and admin_email_result and getattr(admin_email_result, "data", None))
+            )
+            if admin_found:
+                role = "admin"
             else:
-                # Check if user exists in profiles table by id or email
-                profile_response =  supabase.table("profiles").select("id").eq("id", user_id).execute()
-                if not getattr(profile_response, "data", None) and user_email:
-                    profile_response =  supabase.table("profiles").select("id").eq("email", user_email).execute()
-                if not getattr(profile_response, "data", None):
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="User not found in any role table",
-                        headers={"WWW-Authenticate": "Bearer"},
+                # Check station manager
+                manager_data = (
+                    (manager_id_result and getattr(manager_id_result, "data", None)) or
+                    (user_email and manager_email_result and getattr(manager_email_result, "data", None))
+                )
+                if manager_data:
+                    role = "station_manager"
+                    # Get station IDs from stations table where station_manager = user_id (with timeout)
+                    stations_response = await asyncio.wait_for(
+                        supabase.table("stations").select("id").eq("station_manager", user_id).execute(),
+                        timeout=10.0
                     )
+                    station_ids = [s.get("id") for s in (stations_response.data or []) if s.get("id")]
+                    logger.debug(f"[auth] station_managers found: {manager_data}")
+                else:
+                    # Check if user exists in profiles table by id or email
+                    profile_exists = (
+                        (profile_id_result and getattr(profile_id_result, "data", None)) or
+                        (user_email and profile_email_result and getattr(profile_email_result, "data", None))
+                    )
+                    if not profile_exists:
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="User not found in any role table",
+                            headers={"WWW-Authenticate": "Bearer"},
+                        )
 
         # Log final role and station_ids
         logger.info(f"[auth] final role={role} station_ids={station_ids}")

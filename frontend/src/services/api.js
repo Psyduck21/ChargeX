@@ -1,5 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL? import.meta.env.VITE_API_URL : 'http://localhost:8000';
-
+const API_BASE_URL = import.meta.env.VITE_API_URL? import.meta.env.VITE_API_URL : 'http://127.0.0.1:8000';
+console.log('API Base URL:', API_BASE_URL);
 class ApiService {
     constructor() {
         this.baseURL = API_BASE_URL;
@@ -264,6 +264,10 @@ class ApiService {
   // Charging Session APIs
   async getChargingSessions() {
     return this.apiCall('/charging_sessions/');
+  }
+
+  async getUserChargingSessions() {
+    return this.apiCall('/charging_sessions/user/');
   }
 
   async createChargingSession(sessionData) {

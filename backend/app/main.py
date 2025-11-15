@@ -186,10 +186,11 @@ async def startup_event():
     init_db()
     print("✅ Database initialized")
 
-    # Start background tasks for booking lifecycle management
-    asyncio.create_task(activate_started_bookings_task())
-    asyncio.create_task(complete_expired_bookings_task())
-    print("✅ Automatic booking lifecycle tasks started")
+
+    # # Start background tasks for booking lifecycle management
+    # asyncio.create_task(activate_started_bookings_task())
+    # asyncio.create_task(complete_expired_bookings_task())
+    # print("✅ Automatic booking lifecycle tasks started")
     print("🚀 FastAPI startup complete")
 
 @app.get("/")
