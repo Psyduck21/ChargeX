@@ -22,7 +22,7 @@ class ApiService {
             token = localStorage.getItem("access_token");
             if (!token) {
                 // Redirect to login if no token
-                window.location.href = "/login";
+                window.location.href = "/";
                 return;
             }
             headers["Authorization"] = `Bearer ${token}`;
@@ -59,7 +59,7 @@ class ApiService {
                     localStorage.removeItem("access_token");
                     localStorage.removeItem("refresh_token");
                     localStorage.removeItem("user_role");
-                    window.location.href = "/login";
+                    window.location.href = "/";
                     return;
                 }
 
