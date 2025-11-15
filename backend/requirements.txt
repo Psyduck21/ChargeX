@@ -4,3 +4,4 @@ uvicorn[standard]
 python-dotenv
 pydantic
 pydantic[email]
+gunicorn
