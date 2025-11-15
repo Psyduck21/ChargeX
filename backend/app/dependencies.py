@@ -86,24 +86,38 @@ async def get_current_user(token: Optional[str] = None, auth_token: str = Depend
         # If still not admin, perform parallel database queries to check roles
         if role != "admin":
             # Prepare queries with timeouts to prevent hanging on Supabase issues
-            admin_id_query = supabase_service_role.table("admins").select("id").eq("id", user_id).execute()
-            manager_id_query = supabase.table("station_managers").select("*").eq("id", user_id).execute()
-            profile_id_query = supabase.table("profiles").select("id").eq("id", user_id).execute()
+            # Supabase queries are synchronous, so run them in threads with timeouts
+            loop = asyncio.get_event_loop()
 
             tasks = [
-                asyncio.wait_for(admin_id_query, timeout=10.0),
-                asyncio.wait_for(manager_id_query, timeout=10.0),
-                asyncio.wait_for(profile_id_query, timeout=10.0),
+                asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: supabase_service_role.table("admins").select("id").eq("id", user_id).execute()),
+                    timeout=10.0
+                ),
+                asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: supabase.table("station_managers").select("*").eq("id", user_id).execute()),
+                    timeout=10.0
+                ),
+                asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: supabase.table("profiles").select("id").eq("id", user_id).execute()),
+                    timeout=10.0
+                ),
             ]
 
             if user_email:
-                admin_email_query = supabase_service_role.table("admins").select("id").eq("email", user_email).execute()
-                manager_email_query = supabase.table("station_managers").select("*").eq("email", user_email).execute()
-                profile_email_query = supabase.table("profiles").select("id").eq("email", user_email).execute()
                 tasks.extend([
-                    asyncio.wait_for(admin_email_query, timeout=10.0),
-                    asyncio.wait_for(manager_email_query, timeout=10.0),
-                    asyncio.wait_for(profile_email_query, timeout=10.0),
+                    asyncio.wait_for(
+                        loop.run_in_executor(None, lambda: supabase_service_role.table("admins").select("id").eq("email", user_email).execute()),
+                        timeout=10.0
+                    ),
+                    asyncio.wait_for(
+                        loop.run_in_executor(None, lambda: supabase.table("station_managers").select("*").eq("email", user_email).execute()),
+                        timeout=10.0
+                    ),
+                    asyncio.wait_for(
+                        loop.run_in_executor(None, lambda: supabase.table("profiles").select("id").eq("email", user_email).execute()),
+                        timeout=10.0
+                    ),
                 ])
 
             # Run queries in parallel with timeouts
@@ -146,7 +160,7 @@ async def get_current_user(token: Optional[str] = None, auth_token: str = Depend
                     role = "station_manager"
                     # Get station IDs from stations table where station_manager = user_id (with timeout)
                     stations_response = await asyncio.wait_for(
-                        supabase.table("stations").select("id").eq("station_manager", user_id).execute(),
+                        loop.run_in_executor(None, lambda: supabase.table("stations").select("id").eq("station_manager", user_id).execute()),
                         timeout=10.0
                     )
                     station_ids = [s.get("id") for s in (stations_response.data or []) if s.get("id")]
