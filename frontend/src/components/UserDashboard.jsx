@@ -770,13 +770,13 @@ function ChargeXUserDashboard({ onLogout }) {
         )}
 
         {/* History Tab */}
-        {activeTab === 'history' && (
+        {/* {activeTab === 'history' && (
           <HistoryTab
             bookingHistory={bookingHistory}
             setActiveTab={setActiveTab}
             darkMode={isDark}
           />
-        )}
+        )} */}
       </main>
 
       <BookingModal
