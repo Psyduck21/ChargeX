@@ -678,7 +678,7 @@ function ChargeXUserDashboard({ onLogout }) {
             <Calendar className="w-5 h-5" />
             My Bookings
           </button>
-          <button
+          {/* <button
             onClick={() => setActiveTab('history')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
               activeTab === 'history' ? 'bg-emerald-600 text-white' : `${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`
@@ -686,7 +686,7 @@ function ChargeXUserDashboard({ onLogout }) {
           >
             <History className="w-5 h-5" />
             History
-          </button>
+          </button> */}
           <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
             <CreditCard className="w-5 h-5" />
             Payments
@@ -765,6 +765,7 @@ function ChargeXUserDashboard({ onLogout }) {
             stations={stations}
             vehicles={vehicles}
             setActiveTab={setActiveTab}
+            onBookingUpdate={loadUserData}
             darkMode={isDark}
           />
         )}

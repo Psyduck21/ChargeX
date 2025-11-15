@@ -1,7 +1,24 @@
 import React from 'react';
 import { Calendar, MapPin, Clock, Zap, Car } from 'lucide-react';
+import { useToast } from '../ui/Toast';
+import apiService from '../../services/api';
 
-function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [], vehicles = [] }) {
+function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [], vehicles = [], onBookingUpdate }) {
+  const toast = useToast();
+
+  const handleCancelBooking = async (bookingId) => {
+    try {
+      await apiService.cancelBooking(bookingId);
+      toast.success('Booking cancelled successfully!');
+      if (onBookingUpdate) {
+        onBookingUpdate();
+      }
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      toast.error(error?.message || 'Failed to cancel booking. Please try again.');
+    }
+  };
+
   // Helper function to find station by ID
   const getStationById = (stationId) => {
     return stations.find(s => String(s.id) === String(stationId));
@@ -152,14 +169,12 @@ function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [],
                   </div>
                   <div className="flex gap-2">
                     {item.type === 'booking' && item.status === 'pending' && (
-                      <>
-                        <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors">
-                          Confirm
-                        </button>
-                        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors">
-                          Cancel
-                        </button>
-                      </>
+                      <button
+                        onClick={() => handleCancelBooking(item.id)}
+                        className="px-4 py-2 border border-red-300 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition-colors"
+                      >
+                        Cancel Booking
+                      </button>
                     )}
                     {item.type === 'booking' && item.status === 'confirmed' && (
                       <button className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors">
