@@ -40,8 +40,20 @@ async def add_booking(request: Request, current_user: Any = Depends(get_current_
 
     try:
         new_booking = await create_booking(BookingCreate(**data))
+    except ValueError as e:
+        # Handle booking validation errors with user-friendly messages
+        error_msg = str(e)
+        if "unavailable between" in error_msg or "due to booking" in error_msg:
+            raise HTTPException(status_code=409, detail="This charging slot is not available during your selected time. Please choose a different time or slot.")
+        elif "start_time and end_time are required" in error_msg:
+            raise HTTPException(status_code=400, detail="Please select valid start and end times for your booking.")
+        elif "end_time must be after start_time" in error_msg:
+            raise HTTPException(status_code=400, detail="End time must be after start time.")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid booking details. Please check your inputs and try again.")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to create booking: {e}")
+        # Catch any other unexpected errors
+        raise HTTPException(status_code=500, detail="Unable to create booking at this time. Please try again later.")
 
     # Log activity if user is a manager
     user_role = current_user.get("role") if isinstance(current_user, dict) else getattr(current_user, "role", None)
@@ -92,9 +104,31 @@ async def update_booking_item(booking_id: UUID, update: BookingUpdate, current_u
         if not getattr(station_check, 'data', None):
             raise HTTPException(status_code=403, detail="Not authorized to modify bookings for this station")
 
+    # Booking Rejection Logic with Safety Checks and Alternative Stations
+    if user_role == "station_manager" and update.status == "rejected":
+        # Check current battery if provided, or fetch it from existing DB record
+        btry = update.current_battery_level if update.current_battery_level is not None else getattr(existing, "current_battery_level", None)
+        if hasattr(existing, "dict"):
+            btry = existing.dict().get("current_battery_level", btry)
+            
+        if btry is not None and float(btry) < 15.0:
+            raise HTTPException(status_code=400, detail="Cannot reject booking: User vehicle battery is dangerously low (<15%). Recommend acceptance for safety.")
+
     updated = await update_booking(booking_id, update)
     if not updated:
         raise HTTPException(status_code=400, detail="Failed to update booking")
+
+    # If rejected, append the nearest available station to the response
+    if update.status == "rejected" and user_role == "station_manager":
+        try:
+            from ..crud.station import find_nearest_station
+            nearest = await find_nearest_station(str(existing.station_id))
+            if nearest:
+                # since updated is an instance of BookingOut, we set the property
+                updated.nearest_station = nearest
+        except Exception as e:
+            print(f"Error finding nearest station: {e}")
+
     return updated
 
 

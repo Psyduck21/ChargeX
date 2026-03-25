@@ -58,7 +58,7 @@ export default function SlotsTab({
         ...slotForm,
         station_id: selectedStation.id
       };
-      console.log("Adding slot:", newSlot);
+      // console.log("Adding slot:", newSlot);
       await apiService.createSlot(newSlot);
       toast.success('Slot added successfully!');
       setShowAddSlotModal(false);

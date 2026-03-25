@@ -8,5 +8,8 @@ __all__ = [
     "stations",
     "vehicles",
     "station_managers",
+    "activity",
+    "admin",
+    "analytics"
 ]
 

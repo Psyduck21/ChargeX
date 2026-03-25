@@ -49,6 +49,9 @@ async def add_station_manager(manager: Dict[str, Any], current_user: dict = Depe
     insert_response = await create_station_manager(manager)
     print("Created station manager:", insert_response)
 
+    if not insert_response:
+        raise HTTPException(status_code=400, detail="Failed to create station manager")
+
     # Log activity
     user_profile = await get_user_profile(current_user["id"])
     manager_name = manager.get("name", "Unknown")

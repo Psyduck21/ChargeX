@@ -210,7 +210,8 @@ export default function BookingModal({
                       slot_id: String(bookingData.slotId),
                       start_time: startDateTime.toISOString(),
                       end_time: endDateTime.toISOString(),
-                      status: 'pending'
+                      status: 'pending',
+                      current_battery_level: bookingData.currentBattery
                     };
 
                     const createdBooking = await apiService.createBooking(bookingPayload);

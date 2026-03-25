@@ -268,7 +268,7 @@ async def get_manager_bookings(manager_id: str) -> List[Dict[str, Any]]:
         # Get bookings for these stations with slot information
         bookings_response = supabase.table("bookings").select("""
             *,
-            charging_slots!bookings_slot_id_fkey(charger_type, connector_type)
+            charging_slots!bookings_slot_fkey(charger_type, connector_type)
         """).in_("station_id", station_ids).execute()
         bookings = bookings_response.data or []
 

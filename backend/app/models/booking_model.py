@@ -12,6 +12,7 @@ class BookingBase(BaseModel):
     start_time: datetime
     end_time: Optional[datetime] = None
     status: str = "pending"  # pending, accepted, cancelled, completed, rejected
+    current_battery_level: Optional[float] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -24,6 +25,7 @@ class BookingCreate(BaseModel):
     start_time: datetime
     end_time: Optional[datetime] = None
     status: str = "pending"
+    current_battery_level: Optional[float] = None
 
 
 class BookingUpdate(BaseModel):
@@ -32,8 +34,11 @@ class BookingUpdate(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     status: Optional[str] = None
+    current_battery_level: Optional[float] = None
 
 
 class BookingOut(BookingBase):
+    nearest_station: Optional[dict] = None
+
     class Config:
         from_attributes = True

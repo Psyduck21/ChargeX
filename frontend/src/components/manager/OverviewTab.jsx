@@ -47,15 +47,15 @@ export default function OverviewTab({
   });
 
   // Debug logging
-  console.log('All charging sessions:', chargingSessions);
-  console.log('Today date:', today);
-  console.log('Today\'s Sessions:', todaysSessions);
-  console.log('Today\'s Sessions:', todaysSessions);
-  // console.log(session.cost, session.energy_consumed);
+  // console.log('All charging sessions:', chargingSessions);
+  // console.log('Today date:', today);
+  // console.log('Today\'s Sessions:', todaysSessions);
+  // console.log('Today\'s Sessions:', todaysSessions);
+  // // console.log(session.cost, session.energy_consumed);
   const totalRevenue = todaysSessions.reduce((sum, session) => sum + (session.cost || 0), 0);
   const totalEnergy = todaysSessions.reduce((sum, session) => sum + (session.energy_consumed || 0), 0);
-  console.log('revenueData:', revenueData);
-  console.log('energyData:', energyData);
+  // console.log('revenueData:', revenueData);
+  // console.log('energyData:', energyData);
 
   return (
     <div className="space-y-6">

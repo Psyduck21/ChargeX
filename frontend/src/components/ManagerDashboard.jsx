@@ -4,7 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from './ui/Toast';
 import Skeleton from './ui/Skeleton';
 import ManagerSidebar from './manager/ManagerSidebar';
-import Breadcrumb from './manager/Breadcrumb';
+// import Breadcrumb from './manager/Breadcrumb';
 import Tooltip from './manager/Tooltip';
 import BookingAlert from './manager/BookingAlert';
 
@@ -40,9 +40,9 @@ export default function StationManagerDashboard({onLogout}) {
   const [chargerTypeData, setChargerTypeData] = useState([]);
   const [slotStatusData, setSlotStatusData] = useState([]);
 
-  const [breadcrumbs, setBreadcrumbs] = useState([
-    { name: 'Dashboard', path: 'overview' }
-  ]);
+  // const [breadcrumbs, setBreadcrumbs] = useState([
+  //   { name: 'Dashboard', path: 'overview' }
+  // ]);
 
   const fetchAnalyticsData = async () => {
     try {
@@ -110,7 +110,7 @@ export default function StationManagerDashboard({onLogout}) {
       setStations(s || []);
       setBookings(b || []);
       if (p) setManagerProfile(p);
-      console.log('Fetched stations:', s);
+      // console.log('Fetched stations:', s);
     } catch (err) {
       console.error(err);
     } finally {
@@ -199,10 +199,10 @@ export default function StationManagerDashboard({onLogout}) {
       stations: 'My Stations',
       profile: 'Profile'
     };
-    setBreadcrumbs([
-      { name: 'Dashboard', path: 'overview' },
-      { name: tabNames[activeTab], path: activeTab }
-    ]);
+    // setBreadcrumbs([
+    //   { name: 'Dashboard', path: 'overview' },
+    //   { name: tabNames[activeTab], path: activeTab }
+    // ]);
   }, [activeTab]);
 
   const handleConfirmBooking = async (booking) => {
@@ -216,7 +216,19 @@ export default function StationManagerDashboard({onLogout}) {
       audio.play().catch(() => {});
 
       toast.success('Booking confirmed successfully!');
-      fetchAll();
+      
+      // Update local state instead of full refetch
+      setBookings(prev => prev.map(b => 
+        (b.id === booking.id || b.booking_id === booking.id) 
+          ? { ...b, status: 'accepted' } 
+          : b
+      ));
+      
+      // Remove from pending alert immediately
+      setPendingBookings(prev => prev.filter(b => b.id !== booking.id && b.id !== String(booking.id)));
+      setPendingBookingsCount(prev => Math.max(0, prev - 1));
+      if (pendingBookingsCount <= 1) setShowBookingAlert(false);
+      
     } catch (error) {
       console.error('Failed to confirm booking:', error);
       toast.error('Failed to confirm booking. It may conflict with an existing booking.');
@@ -228,13 +240,32 @@ export default function StationManagerDashboard({onLogout}) {
 
     try {
       // Update booking status to rejected
-      await apiService.updateBooking(booking.id, { status: 'rejected' });
+      const response = await apiService.updateBooking(booking.id, { status: 'rejected' });
 
-      toast.success('Booking rejected successfully!');
-      fetchAll();
+      // If backend attached nearest station, inform the manager / or we just let it be.
+      // Typically, the user will be notified of the nearest station in their dashboard, 
+      // but the manager can see it too.
+      if (response && response.nearest_station) {
+        toast.success(`Booking rejected. User advised to visit nearest station: ${response.nearest_station.name}`);
+      } else {
+        toast.success('Booking rejected successfully!');
+      }
+      
+      // Update local state instead of full refetch
+      setBookings(prev => prev.map(b => 
+        (b.id === booking.id || b.booking_id === booking.id) 
+          ? { ...b, status: 'rejected' } 
+          : b
+      ));
+      
+      // Remove from pending alert immediately
+      setPendingBookings(prev => prev.filter(b => b.id !== booking.id && b.id !== String(booking.id)));
+      setPendingBookingsCount(prev => Math.max(0, prev - 1));
+      if (pendingBookingsCount <= 1) setShowBookingAlert(false);
+
     } catch (error) {
       console.error('Failed to reject booking:', error);
-      toast.error('Failed to reject booking. Please try again.');
+      toast.error(error.message || 'Failed to reject booking. Please try again.');
     }
   };
 
@@ -265,7 +296,7 @@ export default function StationManagerDashboard({onLogout}) {
       {/* Main Content */}
       <main className="lg:ml-64 p-4 md:p-8 pt-16 lg:pt-8">
         <header className="mb-8">
-          <Breadcrumb breadcrumbs={breadcrumbs} onNavigate={setActiveTab} darkMode={isDark} />
+          {/* <Breadcrumb breadcrumbs={breadcrumbs} onNavigate={setActiveTab} darkMode={isDark} /> */}
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 gap-4">
             <div>
               <h1 className={`text-2xl md:text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-1`}>

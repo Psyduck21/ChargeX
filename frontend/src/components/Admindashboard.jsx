@@ -334,11 +334,14 @@ export default function AdminDashboard({ onLogout }) {
         try {
           if (type === 'Station') {
             await apiService.deleteStation(id);
+            setStations(prev => prev.filter(s => s.station_id !== id && s.id !== id));
           } else {
             await apiService.deleteStationManager(id);
+            setManagers(prev => prev.filter(m => m.id !== id));
+            // Also unassign from stations locally
+            setStations(prev => prev.map(s => s.station_manager === id ? { ...s, station_manager: null } : s));
           }
           toast.success(`${type} deleted successfully`);
-          fetchAll();
           setConfirmDialog(d => ({ ...d, isOpen: false }));
         } catch (err) {
           console.error(err);
@@ -365,7 +368,20 @@ export default function AdminDashboard({ onLogout }) {
       } else {
         toast.success('Manager unassigned successfully');
       }
-      fetchAll(); // Refresh data
+      
+      // Update local state instead of full refetch
+      setStations(prev => prev.map(s => 
+        (s.id === stationId || s.station_id === stationId) 
+          ? { ...s, station_manager: managerId } 
+          : s
+      ));
+      
+      // We also need to fetch updated manager info or just refresh managers
+      // Since manager assignments on the manager list depend on it, it's safer to re-fetch managers
+      const m = await apiService.getManagersWithStations();
+      const normalizedManagers = (m || []).map(mgr => ({ ...mgr, stations: Array.isArray(mgr.stations) ? mgr.stations : [] }));
+      setManagers(normalizedManagers);
+      
     } catch (err) {
       console.error('Manager assignment error:', err);
       toast.error('Failed to assign manager');
@@ -386,7 +402,17 @@ export default function AdminDashboard({ onLogout }) {
         toast.success('Station assigned to manager successfully');
       }
 
-      fetchAll(); // Refresh data to show updated assignments
+      // Update local state
+      setStations(prev => prev.map(s => 
+        (s.id === stationId || s.station_id === stationId) 
+          ? { ...s, station_manager: targetManagerId } 
+          : s
+      ));
+      
+      const m = await apiService.getManagersWithStations();
+      const normalizedManagers = (m || []).map(mgr => ({ ...mgr, stations: Array.isArray(mgr.stations) ? mgr.stations : [] }));
+      setManagers(normalizedManagers);
+      
     } catch (err) {
       console.error('Station assignment error:', err);
       toast.error('Failed to update station assignment');
@@ -432,7 +458,21 @@ export default function AdminDashboard({ onLogout }) {
       }
 
       closeModal();
-      fetchAll();
+      // Fetch specifically what changed instead of everything
+      if (modalType === 'station') {
+         const s = await apiService.getStationsWithManagers();
+         const normalizedStations = (s || []).map(st => ({ ...st, station_id: st.station_id || st.id }));
+         setStations(normalizedStations);
+      } else {
+         const m = await apiService.getManagersWithStations();
+         const normalizedManagers = (m || []).map(mgr => ({ ...mgr, stations: Array.isArray(mgr.stations) ? mgr.stations : [] }));
+         setManagers(normalizedManagers);
+         
+         // In case they assigned stations during creation, re-fetch stations too
+         const s = await apiService.getStationsWithManagers();
+         const normalizedStations = (s || []).map(st => ({ ...st, station_id: st.station_id || st.id }));
+         setStations(normalizedStations);
+      }
     } catch (err) {
       console.error('Submit error:', err);
       toast.error('Failed to save. See console for details.');

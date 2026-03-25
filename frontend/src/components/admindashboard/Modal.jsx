@@ -304,6 +304,39 @@ export default function Modal({
                   </div>
                 )}
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Assign Stations</label>
+                <div className="border border-gray-200 rounded-xl max-h-48 overflow-y-auto bg-white p-2">
+                  {stations && stations.length > 0 ? (
+                    stations.map((station) => {
+                      const isSelected = formData.station_ids && formData.station_ids.includes(station.station_id || station.id);
+                      return (
+                        <label key={station.station_id || station.id} className="flex items-center gap-3 p-2 hover:bg-emerald-50 rounded cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                            checked={isSelected || false}
+                            onChange={(e) => {
+                              const sid = station.station_id || station.id;
+                              let newIds = formData.station_ids ? [...formData.station_ids] : [];
+                              if (e.target.checked) {
+                                newIds.push(sid);
+                              } else {
+                                newIds = newIds.filter(id => id !== sid);
+                              }
+                              setFormData({ ...formData, station_ids: newIds });
+                            }}
+                          />
+                          <span className="text-sm text-gray-700">{station.name}</span>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-gray-500 p-2">No stations available to assign.</p>
+                  )}
+                </div>
+              </div>
             </>
           )}
 

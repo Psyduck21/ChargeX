@@ -141,8 +141,8 @@ async def remove_station(station_id: UUID, current_user: dict = Depends(get_curr
         user_name=user_profile.email if user_profile else "Unknown",
         role=current_user["role"],
         action="Deleted Station",
-        description=f"Removed station '{station_to_delete.name}'",
-        station_name=station_to_delete.name
+        description=f"Removed station '{station_to_delete['name']}'",
+        station_name=station_to_delete['name']
     )
 
     return result
@@ -169,8 +169,8 @@ async def assign_manager(station_id: UUID, body: Dict[str, Any], current_user: d
         result = await assign_manager_to_station(UUID(str(manager_user_id)), station_id)
         manager = await get_station_manager(UUID(str(manager_user_id)))
         station = await get_station(station_id)
-        station_name = station['name']
-        # print(f"station: {station} #################################################################################")
+        station_name = station['name'] if station else "Unknown"
+        print(f"station: {station} #################################################################################")
         manager_name = manager['name'] if manager else "Unknown"
         # Log activity
         user_profile = await get_user_profile(current_user["id"])

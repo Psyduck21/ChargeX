@@ -151,7 +151,6 @@ export default function EVChargingLanding({ onSwitchToLogin, onSwitchToSignup, o
       { name: 'Login', action: () => { setShowLogin(true); setShowCommandPalette(false); }, icon: Lock },
       { name: 'View Features', action: () => { document.getElementById('features').scrollIntoView({ behavior: 'smooth' }); setShowCommandPalette(false); }, icon: Star },
       { name: 'How It Works', action: () => { document.getElementById('how-it-works').scrollIntoView({ behavior: 'smooth' }); setShowCommandPalette(false); }, icon: Battery },
-      { name: 'Testimonials', action: () => { document.getElementById('testimonials').scrollIntoView({ behavior: 'smooth' }); setShowCommandPalette(false); }, icon: Users },
     ];
 
     const filteredCommands = commands.filter(cmd =>
@@ -241,9 +240,7 @@ export default function EVChargingLanding({ onSwitchToLogin, onSwitchToSignup, o
 
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Features</a>
-              <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">How It Works</a>
-              <a href="#testimonials" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Testimonials</a>
-              <button
+              <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">How It Works</a>              <button
                 onClick={() => setShowLogin(true)}
                 className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
               >
@@ -278,9 +275,7 @@ export default function EVChargingLanding({ onSwitchToLogin, onSwitchToSignup, o
           <div className="md:hidden bg-white border-t border-gray-200">
             <div className="px-4 py-4 space-y-3">
               <a href="#features" className="block text-gray-600 hover:text-gray-900 font-medium py-2">Features</a>
-              <a href="#how-it-works" className="block text-gray-600 hover:text-gray-900 font-medium py-2">How It Works</a>
-              <a href="#testimonials" className="block text-gray-600 hover:text-gray-900 font-medium py-2">Testimonials</a>
-              <button
+              <a href="#how-it-works" className="block text-gray-600 hover:text-gray-900 font-medium py-2">How It Works</a>              <button
                 onClick={() => { setShowLogin(true); setMobileMenuOpen(false); }}
                 className="block w-full text-left text-gray-600 hover:text-gray-900 font-medium py-2"
               >
@@ -471,63 +466,7 @@ export default function EVChargingLanding({ onSwitchToLogin, onSwitchToSignup, o
           </div>
         </div>
       </section>
-
-      {/* Testimonials Section */}
-      <section id="testimonials" className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">What Our Users Say</h2>
-            <p className="text-xl text-gray-600">Join thousands of satisfied EV owners</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                name: 'Sarah Johnson',
-                role: 'Tesla Model 3 Owner',
-                image: 'https://i.pravatar.cc/150?img=1',
-                rating: 5,
-                text: 'ChargeX has made my daily commute so much easier. I can always find a station and book in advance. Highly recommended!'
-              },
-              {
-                name: 'Michael Chen',
-                role: 'Nissan Leaf Driver',
-                image: 'https://i.pravatar.cc/150?img=2',
-                rating: 5,
-                text: 'The app is intuitive and the pricing is transparent. I love how I can track my charging history and environmental impact.'
-              },
-              {
-                name: 'Emily Rodriguez',
-                role: 'BMW i4 Owner',
-                image: 'https://i.pravatar.cc/150?img=3',
-                rating: 5,
-                text: 'Premium support is excellent! The priority booking feature saves me so much time. Worth every penny.'
-              }
-            ].map((testimonial, index) => (
-              <div key={index} className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all">
-                <div className="flex items-center gap-1 mb-4">
-                  {Array.from({ length: testimonial.rating }).map((_, i) => (
-                    <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                  ))}
-                </div>
-                <p className="text-gray-700 mb-6 leading-relaxed">"{testimonial.text}"</p>
-                <div className="flex items-center gap-4">
-                  <img
-                    src={testimonial.image}
-                    alt={testimonial.name}
-                    className="w-12 h-12 rounded-full"
-                  />
-                  <div>
-                    <div className="font-semibold text-gray-900">{testimonial.name}</div>
-                    <div className="text-sm text-gray-600">{testimonial.role}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
+      
       {/* Stats Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-500 to-emerald-600">
         <div className="max-w-7xl mx-auto">
@@ -618,7 +557,7 @@ export default function EVChargingLanding({ onSwitchToLogin, onSwitchToSignup, o
             </div>
           </div>
           <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between">
-            <p className="text-gray-400">© 2024 ChargeX. All rights reserved.</p>
+            <p className="text-gray-400">© 2026 ChargeX. All rights reserved.</p>
             <div className="flex items-center gap-6 mt-4 md:mt-0">
               <a href="#" className="text-gray-400 hover:text-white transition-colors">
                 <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>

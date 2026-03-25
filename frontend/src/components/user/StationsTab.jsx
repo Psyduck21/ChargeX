@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Search, Filter, Navigation, Star, Clock, Battery, DollarSign, Calendar, ChevronRight, Heart, User, Bell, Settings, LogOut, Menu, X, Bookmark, History, CreditCard, Phone, Mail, AlertCircle, Car, Plus, Edit2, Trash2, BarChart3, TrendingUp, Leaf, ChevronDown, Zap } from 'lucide-react';
 import StationCard from './StationCard';
+import UserDashboardMap from './UserDashboardMap';
+import { Map } from 'lucide-react';
 import apiService from '../../services/api';
 
 function StationsTab({
@@ -16,11 +18,10 @@ function StationsTab({
   vehicles,
   onBookStation,
   onGetDirections,
-  locationPermission,
-  requestLocationPermission,
-  darkMode = false
 }) {
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
+  const [userLocation, setUserLocation] = useState(null);
   const [userStats, setUserStats] = useState({
     totalBookings: 0,
     totalEnergy: 0,
@@ -48,7 +49,17 @@ function StationsTab({
     };
 
     fetchUserStats();
-  }, []);
+
+    // Get user's current location once
+    if (navigator.geolocation && locationPermission !== 'denied') {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+        },
+        () => {}
+      );
+    }
+  }, [locationPermission]);
 
   const FilterPanel = () => {
     if (!showFilters) return null;
@@ -236,6 +247,16 @@ function StationsTab({
               <option value="rating">Sort by Rating</option>
             </select>
             <button
+              onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
+              className={`px-6 py-3 border rounded-xl font-semibold transition-colors flex items-center gap-2 ${darkMode ? 'border-gray-600 bg-gray-700 text-white hover:bg-gray-600' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+            >
+              {viewMode === 'list' ? (
+                <><Map className="w-5 h-5 text-emerald-600" /> Map View</>
+              ) : (
+                <><Filter className="w-5 h-5 text-emerald-600" /> List View</>
+              )}
+            </button>
+            <button
               onClick={() => setShowFilters(true)}
               className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors flex items-center gap-2"
             >
@@ -293,6 +314,14 @@ function StationsTab({
           <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>No stations found</h3>
           <p className={`mb-6 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Try adjusting your filters or search query</p>
         </div>
+      ) : viewMode === 'map' ? (
+        <UserDashboardMap
+          stations={filteredStations}
+          userLocation={userLocation}
+          onBookStation={onBookStation}
+          onGetDirections={onGetDirections}
+          darkMode={darkMode}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredStations.map((station) => (
