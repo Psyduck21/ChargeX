@@ -1,185 +1,462 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { MapPin, Navigation, X, Zap, Star, DollarSign, Users, Phone, Clock } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Zap, Navigation, Star, Clock, Battery } from 'lucide-react';
-import Button from './ui/Button';
+import L from 'leaflet';
 
-// Fix for default marker icons in React-Leaflet
-delete L.Icon.Default.prototype._getIconUrl;
+// Custom CSS to override leaflet z-index values
+const mapStyles = `
+  .leaflet-container .leaflet-popup-pane { z-index: 10 !important; }
+  .leaflet-container .leaflet-tooltip-pane { z-index: 15 !important; }
+  .leaflet-container .leaflet-marker-pane { z-index: 20 !important; }
+  .leaflet-container .leaflet-shadow-pane { z-index: 25 !important; }
+  .leaflet-container .leaflet-overlay-pane { z-index: 30 !important; }
+  .leaflet-container .leaflet-control-container .leaflet-control { z-index: 35 !important; }
+  .leaflet-container .leaflet-map-pane canvas { z-index: 5 !important; }
+  .leaflet-container .leaflet-map-pane svg { z-index: 10 !important; }
+`;
 
-// Custom EV station map icon
-const createStationIcon = (isAvailable, size = 32) => {
-  const color = isAvailable ? '#10b981' : '#f59e0b';
-  
-  const svgIcon = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" width="${size}" height="${size}">
-      <path fill="${color}" d="M172.268 501.67C26.97 291.031 0 269.413 0 192 0 85.961 85.961 0 192 0s192 85.961 192 192c0 77.413-26.97 99.031-172.268 309.67-9.535 13.774-29.93 13.773-39.464 0z"/>
-      <path fill="#ffffff" d="M213.3 160h-48V64l-64 128h48v96l64-128z"/>
-    </svg>
-  `;
-  
-  return L.divIcon({
-    className: 'custom-div-icon',
-    html: svgIcon,
-    iconSize: [size, size],
-    iconAnchor: [size/2, size]
-  });
-};
+// Inject custom styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = mapStyles;
+  document.head.appendChild(styleSheet);
+}
 
-// Component to dynamically set map center
-function MapViewUpdater({ center }) {
+// Component to handle map centering when user location changes
+function MapCenterHandler({ center, zoom }) {
   const map = useMap();
+
   useEffect(() => {
-    if (center && center.lat && center.lng) {
-      map.setView([center.lat, center.lng], map.getZoom(), { animate: true });
+    if (center) {
+      map.setView(center, zoom);
     }
-  }, [center, map]);
+  }, [center, zoom, map]);
+
   return null;
 }
 
-export default function UserDashboardMap({ 
-  stations, 
-  userLocation, 
-  onBookStation, 
-  onGetDirections,
-  darkMode 
+/**
+ * UserDashboardMap Component
+ * Displays charging stations on an interactive Leaflet map
+ * Shows user location and allows interaction with stations
+ */
+export default function UserDashboardMap({
+  stations = [],
+  userLocation = null,
+  onBookStation = null,
+  onOpenBookingModal = null,
+  onGetDirections = null,
+  darkMode = false,
+  showBookingModal = false,
+  selectedStationForBooking = null,
+  onCloseBookingModal = null
 }) {
-  const [mapCenter, setMapCenter] = useState({ lat: 28.6139, lng: 77.2090 }); // Default
-  const [activeStation, setActiveStation] = useState(null);
+  const [selectedStation, setSelectedStation] = useState(null);
+  const [mapCenter, setMapCenter] = useState([40.7128, -74.0060]); // Default to NYC
+  const [mapZoom, setMapZoom] = useState(13);
 
+  // Set map center based on user location (highest priority) or first station
   useEffect(() => {
     if (userLocation && userLocation.lat && userLocation.lng) {
-      setMapCenter(userLocation);
+      // User location has highest priority
+      setMapCenter([userLocation.lat, userLocation.lng]);
+      setMapZoom(15); // Higher zoom for user location
     } else if (stations && stations.length > 0) {
-      // Find first station with valid coordinates as fallback
-      const validStation = stations.find(s => s.lat && s.lng);
-      if (validStation) {
-        setMapCenter({ lat: validStation.lat, lng: validStation.lng });
+      // Fallback to first station if no user location
+      const firstStation = stations[0];
+      if (firstStation.latitude && firstStation.longitude) {
+        setMapCenter([firstStation.latitude, firstStation.longitude]);
+        setMapZoom(13);
       }
+    } else {
+      // Ultimate fallback to NYC
+      setMapCenter([40.7128, -74.0060]);
+      setMapZoom(12);
     }
   }, [userLocation, stations]);
 
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(1);
+  };
+
+  const normalizeStation = (station) => ({
+    ...station,
+    latitude: station.latitude ?? station.lat,
+    longitude: station.longitude ?? station.lng,
+    available_slots: station.available_slots ?? station.availableSlots ?? 0,
+    total_slots: station.total_slots ?? station.totalSlots ?? 0,
+    price_per_hour: station.price_per_hour ?? station.pricePerHour ?? 0,
+    connector_types: station.connector_types ?? station.connectorTypes ?? [],
+    address: station.address ?? station.location ?? station.name ?? 'Charging Station',
+    name: station.name ?? station.station_name ?? 'Charging Station'
+  });
+
+  const handleStationClick = (station) => {
+    setSelectedStation(station);
+  };
+
+  const handleGetDirections = (station) => {
+    if (onGetDirections) {
+      onGetDirections(station);
+    } else if (userLocation) {
+      const origin = `${userLocation.lat},${userLocation.lng}`;
+      const destination = `${station.latitude || station.lat},${station.longitude || station.lng}`;
+      const mapsUrl = `https://www.google.com/maps/dir/${origin}/${destination}`;
+      window.open(mapsUrl, '_blank');
+    }
+  };
+
+  const handleOpenBookingModal = (station) => {
+    if (onOpenBookingModal) {
+      onOpenBookingModal(station);
+    }
+  };
+
+  // Custom marker icons
+  const createStationIcon = (station) => {
+    const isSelected = selectedStation && selectedStation.id === station.id;
+    return L.divIcon({
+      className: 'custom-station-marker',
+      html: `
+        <div style="
+          background-color: ${isSelected ? '#ef4444' : '#10b981'};
+          border: 3px solid white;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          color: white;
+          font-weight: bold;
+          font-size: 12px;
+        ">
+          ⚡
+        </div>
+      `,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+  };
+
+  const createUserIcon = () => {
+    return L.divIcon({
+      className: 'custom-user-marker',
+      html: `
+        <div style="
+          background-color: #3b82f6;
+          border: 3px solid white;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          color: white;
+          font-weight: bold;
+          font-size: 10px;
+        ">
+          📍
+        </div>
+      `,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
+  };
+
+  if (!stations || stations.length === 0) {
+    return (
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl p-12 text-center`}>
+        <MapPin className="w-10 h-10 mx-auto mb-4 text-gray-400" />
+        <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>No stations available to display on map</p>
+      </div>
+    );
+  }
+
   return (
-    <div className={`relative w-full h-[calc(100vh-180px)] rounded-2xl overflow-hidden border ${darkMode ? 'border-gray-700' : 'border-gray-200'} shadow-lg`}>
-      <MapContainer 
-        center={[mapCenter.lat, mapCenter.lng]} 
-        zoom={12} 
-        style={{ height: '100%', width: '100%', zIndex: 10 }}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url={darkMode 
-            ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          }
-        />
-        <MapViewUpdater center={mapCenter} />
-
-        {userLocation && userLocation.lat && (
-          <Marker 
-            position={[userLocation.lat, userLocation.lng]}
-            icon={L.divIcon({
-              className: 'user-location-marker',
-              html: `<div style="width:16px;height:16px;background-color:#3b82f6;border-radius:50%;border:3px solid white;box-shadow:0 0 10px rgba(0,0,0,0.3)"></div>`,
-              iconSize: [16, 16],
-              iconAnchor: [8, 8]
-            })}
+    <div className="space-y-4 relative z-0">
+      {/* Map Container */}
+      <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-2xl border overflow-hidden shadow-lg relative z-0 ${showBookingModal && selectedStationForBooking ? 'hidden' : ''}`}>
+        <div className="h-96 w-full relative z-0">
+          <MapContainer
+            center={mapCenter}
+            zoom={mapZoom}
+            style={{ height: '100%', width: '100%', zIndex: 0 }}
+            className="rounded-2xl relative z-0"
           >
-            <Popup>
-              <div className="font-semibold">Your Location</div>
-            </Popup>
-          </Marker>
-        )}
+            <MapCenterHandler center={mapCenter} zoom={mapZoom} />
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              maxZoom={20}
+              subdomains="abcd"
+            />
 
-        {(stations || []).map(station => {
-          if (!station.lat || !station.lng) return null;
-          const isAvailable = station.availableSlots > 0 && station.isOpen;
-          
-          return (
-            <Marker
-              key={station.id}
-              position={[station.lat, station.lng]}
-              icon={createStationIcon(isAvailable, activeStation?.id === station.id ? 44 : 36)}
-              eventHandlers={{
-                click: () => setActiveStation(station),
-              }}
-            >
-              <Popup className="station-popup" closeButton={false}>
-                <div className={`p-1 min-w-[240px]`}>
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-gray-900 text-lg leading-tight">{station.name}</h3>
-                    <div className="flex items-center gap-1 bg-yellow-100 px-1.5 py-0.5 rounded text-xs font-bold text-yellow-700">
-                      <Star className="w-3 h-3 fill-current" />
-                      {station.rating || 'N/A'}
-                    </div>
+            {/* User Location Marker */}
+            {userLocation && userLocation.lat && userLocation.lng && (
+              <Marker
+                position={[userLocation.lat, userLocation.lng]}
+                icon={createUserIcon()}
+              >
+                <Popup>
+                  <div className="text-center">
+                    <strong>Your Location</strong>
                   </div>
-                  
-                  <p className="text-gray-500 text-xs mb-3 truncate" title={station.address}>
-                    {station.address}
-                  </p>
-                  
-                  <div className="flex gap-2 mb-3">
-                    <div className="flex-1 bg-gray-50 p-2 rounded relative overflow-hidden flex flex-col justify-center">
-                      <div className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold flex items-center gap-1 mb-0.5">
-                        <Battery className="w-3 h-3" /> available
+                </Popup>
+              </Marker>
+            )}
+
+            {/* Station Markers */}
+            {stations.map((station) => {
+              const normalized = normalizeStation(station);
+              const lat = normalized.latitude;
+              const lng = normalized.longitude;
+
+              if (!lat || !lng) return null;
+
+              const distance = userLocation
+                ? calculateDistance(userLocation.lat, userLocation.lng, lat, lng)
+                : null;
+
+              return (
+                <Marker
+                  key={normalized.id}
+                  position={[lat, lng]}
+                  icon={createStationIcon(normalized)}
+                  eventHandlers={{
+                    click: () => handleStationClick(normalized),
+                  }}
+                >
+                  <Popup>
+                    <div className="min-w-72 max-w-80">
+                      <h3 className="font-bold text-lg mb-2">{normalized.name || 'Charging Station'}</h3>
+                      <p className="text-sm text-gray-600 mb-3">{normalized.address}</p>
+
+                      {distance && (
+                        <p className="text-sm text-blue-600 mb-3 flex items-center gap-1">
+                          📍 {distance} km away
+                        </p>
+                      )}
+
+                      {/* Enhanced Slots Information */}
+                      <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Zap className="w-4 h-4 text-green-600" />
+                            <span className="text-sm font-medium">Available Slots</span>
+                          </div>
+                          <span className={`text-sm font-bold px-2 py-1 rounded-full ${
+                            (normalized.available_slots || 0) > 0
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {normalized.available_slots || 0} / {normalized.total_slots || 'N/A'}
+                          </span>
+                        </div>
+
+                        {/* Slot Status Visualization */}
+                        <div className="flex gap-1 mb-2">
+                          {Array.from({ length: Math.min(normalized.total_slots || 4, 8) }, (_, i) => (
+                            <div
+                              key={i}
+                              className={`w-3 h-3 rounded-full ${
+                                i < (normalized.available_slots || 0)
+                                  ? 'bg-green-500'
+                                  : 'bg-gray-300'
+                              }`}
+                              title={i < (normalized.available_slots || 0) ? 'Available' : 'Occupied'}
+                            />
+                          ))}
+                          {(normalized.total_slots || 0) > 8 && (
+                            <span className="text-xs text-gray-500 ml-1">
+                              +{(normalized.total_slots || 0) - 8} more
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="font-bold text-gray-900 text-sm">
-                        <span className={isAvailable ? "text-emerald-600" : "text-gray-400"}>
-                          {station.availableSlots}
-                        </span>
-                        <span className="text-gray-400 text-xs font-normal"> / {station.totalSlots}</span>
+
+                      {/* Pricing Information */}
+                      {normalized.price_per_hour && (
+                        <div className="flex items-center gap-2 mb-3 p-2 bg-blue-50 rounded-lg">
+                          <DollarSign className="w-4 h-4 text-blue-600" />
+                          <div>
+                            <span className="text-sm font-medium">₹{normalized.price_per_hour}/hour</span>
+                            <span className="text-xs text-gray-600 ml-2">
+                              Est. ₹{(normalized.price_per_hour * 2).toFixed(0)} for 2hrs
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Connector Types */}
+                      {normalized.connector_types && normalized.connector_types.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-xs text-gray-600 mb-1">Connector Types:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {normalized.connector_types.slice(0, 3).map((ct, idx) => (
+                              <span key={idx} className="text-xs bg-gray-100 px-2 py-1 rounded-full">
+                                {ct.connector_type || ct.type || ct}
+                              </span>
+                            ))}
+                            {normalized.connector_types.length > 3 && (
+                              <span className="text-xs text-gray-500">+{normalized.connector_types.length - 3} more</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleGetDirections(normalized)}
+                          className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+                        >
+                          <Navigation className="w-4 h-4" />
+                          Directions
+                        </button>
+                        <button
+                          onClick={() => handleOpenBookingModal(normalized)}
+                          className="flex-1 bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1"
+                        >
+                          <Zap className="w-4 h-4" />
+                          Book Now
+                        </button>
                       </div>
                     </div>
-                    
-                    <div className="flex-1 bg-gray-50 p-2 rounded relative overflow-hidden flex flex-col justify-center">
-                      <div className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold flex items-center gap-1 mb-0.5">
-                        <Clock className="w-3 h-3" /> speed
-                      </div>
-                      <div className="font-bold text-gray-900 text-sm">
-                        {station.chargerTypes?.[0] || 'Standard'}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <p className="font-bold text-gray-900 mb-3 text-sm">₹{station.pricePerHour}<span className="text-gray-400 text-xs font-normal">/hr</span></p>
-                  
-                  <div className="flex gap-2">
-                    <Button 
-                      onClick={() => onGetDirections(station)}
-                      variant="outline"
-                      className="flex-1 text-xs py-1.5 px-0 h-auto flex flex-row items-center justify-center gap-1"
-                    >
-                      <Navigation className="w-3 h-3" /> Dir
-                    </Button>
-                    <Button 
-                      onClick={() => onBookStation(station)}
-                      variant="primary"
-                      className={`flex-[2] text-xs py-1.5 px-0 h-auto ${isAvailable ? 'bg-emerald-600' : 'bg-gray-400 cursor-not-allowed border-none text-white'}`}
-                      disabled={!isAvailable}
-                    >
-                      {isAvailable ? 'Book Now' : 'Full'}
-                    </Button>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
-      </MapContainer>
-      
-      <div className={`absolute bottom-6 right-6 z-[1000] p-3 rounded-xl shadow-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white'}`}>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <div dangerouslySetInnerHTML={{__html: createStationIcon(true, 20).options.html}} />
-            <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Available</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div dangerouslySetInnerHTML={{__html: createStationIcon(false, 20).options.html}} />
-            <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Full / Offline</span>
+                  </Popup>
+                </Marker>
+              );
+            })}
+          </MapContainer>
+        </div>
+
+        {/* Map Legend */}
+        <div className={`p-4 border-t ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-500 rounded-full"/>
+              <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Charging Stations</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-500 rounded-full"/>
+              <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Your Location</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-500 rounded-full"/>
+              <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Selected</span>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Stations List Below Map */}
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl p-6 relative z-10 ${showBookingModal && selectedStationForBooking ? 'hidden' : ''}`}>
+        <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          Stations ({stations.length})
+        </h3>
+        <div className="space-y-3 max-h-64 overflow-y-auto">
+          {stations.map((station) => {
+            const normalized = normalizeStation(station);
+            const distance = userLocation
+              ? calculateDistance(userLocation.lat, userLocation.lng, normalized.latitude, normalized.longitude)
+              : null;
+
+            return (
+              <div
+                key={normalized.id}
+                onClick={() => handleStationClick(normalized)}
+                className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  selectedStation?.id === normalized.id
+                    ? darkMode
+                      ? 'bg-emerald-900 border-emerald-500'
+                      : 'bg-emerald-50 border-emerald-500'
+                    : darkMode
+                    ? 'bg-gray-700 border-gray-600 hover:border-emerald-500'
+                    : 'bg-gray-50 border-gray-200 hover:border-emerald-500'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {normalized.name || 'Charging Station'}
+                    </h4>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-1`}>
+                      {normalized.address}
+                    </p>
+
+                    {/* Enhanced Slot Status */}
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-2 h-2 rounded-full ${
+                        (normalized.available_slots || 0) > 0 ? 'bg-green-500' : 'bg-red-500'
+                      }`} />
+                      <span className={`text-sm font-medium ${
+                        (normalized.available_slots || 0) > 0
+                          ? (darkMode ? 'text-green-400' : 'text-green-600')
+                          : (darkMode ? 'text-red-400' : 'text-red-600')
+                      }`}>
+                        {normalized.available_slots || 0} of {normalized.total_slots || 'N/A'} slots free
+                      </span>
+                    </div>
+
+                    {distance && (
+                      <p className={`text-sm font-medium ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        📍 {distance} km away
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="text-right ml-4">
+                    {/* Price Display */}
+                    {normalized.price_per_hour && (
+                      <div className={`text-sm font-bold ${darkMode ? 'text-green-400' : 'text-green-600'} mb-1`}>
+                        ₹{normalized.price_per_hour}/hr
+                      </div>
+                    )}
+
+                    {/* Connector Types */}
+                    {normalized.connector_types && normalized.connector_types.length > 0 && (
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {normalized.connector_types.slice(0, 2).map((ct, idx) => (
+                          <span key={idx} className={`text-xs px-2 py-1 rounded-full ${
+                            darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {ct.connector_type || ct.type || ct}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => handleOpenBookingModal(normalized)}
+                    className="flex-1 bg-emerald-600 text-white py-2 rounded-xl font-semibold hover:bg-emerald-700 transition-colors"
+                  >
+                    Book Now
+                  </button>
+                  <button
+                    onClick={() => handleGetDirections(normalized)}
+                    className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-xl hover:bg-gray-200 transition-colors"
+                  >
+                    Directions
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
     </div>
   );
 }

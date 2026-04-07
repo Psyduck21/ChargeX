@@ -209,8 +209,8 @@ export default function StationManagerDashboard({onLogout}) {
     if (!booking?.id) return;
 
     try {
-      // Update booking status to accepted
-      await apiService.updateBooking(booking.id, { status: 'accepted' });
+      // Update booking status to confirmed
+      await apiService.updateBooking(booking.id, { status: 'confirmed' });
 
       const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBj2Y3vHLdS0GKXzM8t2PTwsWZr3u669eGQg+jdzzvWopBjSO2fPFdCsFJ3/L8NuVR');
       audio.play().catch(() => {});
@@ -220,7 +220,7 @@ export default function StationManagerDashboard({onLogout}) {
       // Update local state instead of full refetch
       setBookings(prev => prev.map(b => 
         (b.id === booking.id || b.booking_id === booking.id) 
-          ? { ...b, status: 'accepted' } 
+          ? { ...b, status: 'confirmed' } 
           : b
       ));
       
@@ -239,8 +239,8 @@ export default function StationManagerDashboard({onLogout}) {
     if (!booking?.id) return;
 
     try {
-      // Update booking status to rejected
-      const response = await apiService.updateBooking(booking.id, { status: 'rejected' });
+      // Update booking status to cancelled
+      const response = await apiService.updateBooking(booking.id, { status: 'cancelled' });
 
       // If backend attached nearest station, inform the manager / or we just let it be.
       // Typically, the user will be notified of the nearest station in their dashboard, 
@@ -254,7 +254,7 @@ export default function StationManagerDashboard({onLogout}) {
       // Update local state instead of full refetch
       setBookings(prev => prev.map(b => 
         (b.id === booking.id || b.booking_id === booking.id) 
-          ? { ...b, status: 'rejected' } 
+          ? { ...b, status: 'cancelled' } 
           : b
       ));
       

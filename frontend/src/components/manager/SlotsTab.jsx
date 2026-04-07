@@ -53,16 +53,20 @@ export default function SlotsTab({
     e.preventDefault();
     if (!selectedStation) return;
 
+    const stationSlots = slots[selectedStation.id] || [];
+    const nextSlotNumber = stationSlots.length > 0 ? Math.max(...stationSlots.map(s => s.slot_number || 0)) + 1 : 1;
+
     try {
       const newSlot = {
         ...slotForm,
+        slot_number: nextSlotNumber,
         station_id: selectedStation.id
       };
       // console.log("Adding slot:", newSlot);
       await apiService.createSlot(newSlot);
       toast.success('Slot added successfully!');
       setShowAddSlotModal(false);
-      setSlotForm({ slot_number: 1, charger_type: 'Fast', status: 'available', connector_type: 'Type 2', max_power_kw: 22, is_available: true });
+      setSlotForm({ charger_type: 'Fast', status: 'available', connector_type: 'Type 2', max_power_kw: 22, is_available: true });
       fetchAllSlots();
     } catch (error) {
       console.error('Failed to add slot:', error);
@@ -79,7 +83,7 @@ export default function SlotsTab({
       toast.success('Slot updated successfully!');
       setShowEditSlotModal(false);
       setSelectedSlot(null);
-      setSlotForm({ slot_number: 1, charger_type: 'Fast', status: 'available', connector_type: 'Type 2', max_power_kw: 22, is_available: true });
+      setSlotForm({ charger_type: 'Fast', status: 'available', connector_type: 'Type 2', max_power_kw: 22, is_available: true });
       fetchAllSlots();
     } catch (error) {
       console.error('Failed to update slot:', error);
@@ -102,7 +106,7 @@ export default function SlotsTab({
 
   const openAddSlotModal = (station) => {
     setSelectedStation(station);
-    setSlotForm({ slot_number: 1, charger_type: 'Fast', status: 'available', connector_type: 'Type 2', max_power_kw: 22, is_available: true });
+    setSlotForm({ charger_type: 'Fast', status: 'available', connector_type: 'Type 2', max_power_kw: 22, is_available: true });
     setShowAddSlotModal(true);
   };
 
@@ -278,20 +282,6 @@ export default function SlotsTab({
             <form onSubmit={handleAddSlot} className="space-y-4">
               <div>
                 <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                  Slot Number
-                </label>
-                <input
-                  type="number"
-                  value={slotForm.slot_number}
-                  onChange={(e) => setSlotForm({ ...slotForm, slot_number: parseInt(e.target.value) })}
-                  className={`w-full px-4 py-2.5 border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'} rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  min="1"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                   Charger Type
                 </label>
                 <select
@@ -379,20 +369,6 @@ export default function SlotsTab({
             </h3>
 
             <form onSubmit={handleEditSlot} className="space-y-4">
-              <div>
-                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                  Slot Number
-                </label>
-                <input
-                  type="number"
-                  value={slotForm.slot_number}
-                  onChange={(e) => setSlotForm({ ...slotForm, slot_number: parseInt(e.target.value) })}
-                  className={`w-full px-4 py-2.5 border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'} rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  min="1"
-                  required
-                />
-              </div>
-
               <div>
                 <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                   Charger Type

@@ -104,3 +104,61 @@ async def find_nearest_station(station_id: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         print(f"❌ Error finding nearest station: {e}")
         return None
+
+async def find_nearby_stations(station_id: str, limit: int = 3, sort_by: str = "distance") -> List[Dict[str, Any]]:
+    """Find nearby stations with available slots relative to the given station ID, sorted by distance or power."""
+    try:
+        supabase = await get_supabase_client()
+        target_resp = supabase.table("stations").select("latitude, longitude").eq("id", station_id).single().execute()
+        target = target_resp.data
+        if not target or target.get("latitude") is None or target.get("longitude") is None:
+            return []
+            
+        target_lat = float(target["latitude"])
+        target_lon = float(target["longitude"])
+
+        # Fetch full station details with all relevant fields
+        other_resp = supabase.table("stations").select(
+            "id, name, address, city, country, zip_code, latitude, longitude, available_slots, total_slots, "
+            "price_per_hour, rating, reviews, connector_types"
+        ).gt("available_slots", 0).neq("id", station_id).execute()
+        others = other_resp.data or []
+        
+        def haversine(lat1, lon1, lat2, lon2):
+            R = 6371.0
+            dlat = math.radians(lat2 - lat1)
+            dlon = math.radians(lon2 - lon1)
+            a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            return R * c
+
+        valid_stations = []
+        for st in others:
+            if st.get("latitude") is None or st.get("longitude") is None:
+                continue
+            dist = haversine(target_lat, target_lon, float(st["latitude"]), float(st["longitude"]))
+            st["distance_km"] = round(dist, 2)
+            
+            # Calculate max power from connector_types if available
+            max_power = 0
+            if st.get("connector_types") and isinstance(st["connector_types"], list):
+                for connector in st["connector_types"]:
+                    if isinstance(connector, dict) and connector.get("max_power_kw"):
+                        max_power = max(max_power, connector.get("max_power_kw", 0))
+            st["max_power_kw"] = max_power
+            
+            valid_stations.append(st)
+        
+        # Sort based on the sort_by parameter    
+        if sort_by == "power":
+            # Sort by max power descending (fastest chargers first)
+            valid_stations.sort(key=lambda x: x.get("max_power_kw", 0), reverse=True)
+        else:
+            # Default: sort by distance ascending (nearest first)
+            valid_stations.sort(key=lambda x: x["distance_km"])
+        
+        return valid_stations[:limit]
+
+    except Exception as e:
+        print(f"❌ Error finding nearby stations: {e}")
+        return []

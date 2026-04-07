@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Car, ChevronDown } from 'lucide-react';
 import apiService from '../../services/api';
 import { useToast } from '../ui/Toast';
+import AlternativeSlotsModal from '../AlternativeSlotsModal';
 
 export default function BookingModal({
   selectedStation,
@@ -15,7 +16,41 @@ export default function BookingModal({
   slotFetchError = null
 }) {
   const toast = useToast();
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const [alternativeStations, setAlternativeStations] = useState([]);
+  const [alternativesLoading, setAlternativesLoading] = useState(false);
+  const [lowBatteryMode, setLowBatteryMode] = useState(false);
   if (!selectedStation) return null;
+
+  const isLowBattery = () => bookingData.currentBattery < 15;
+
+  // Parse 409 error message to extract nearby stations
+  const parseConflictError = async (errorMessage) => {
+    try {
+      // Determine if battery is low
+      const lowBattery = isLowBattery();
+      setLowBatteryMode(lowBattery);
+
+      // Fetch full station details for nearby stations
+      setAlternativesLoading(true);
+      try {
+        // Fetch with power sorting if battery is low, distance otherwise
+        const sortBy = lowBattery ? "power" : "distance";
+        const allNearby = await apiService.getNearbyStations(selectedStation.id, 5, sortBy);
+        
+        if (allNearby && allNearby.length > 0) {
+          setAlternativeStations(allNearby);
+          setShowAlternatives(true);
+          return true; // Successfully showed alternatives
+        }
+      } finally {
+        setAlternativesLoading(false);
+      }
+    } catch (error) {
+      console.error('Error fetching conflict alternatives:', error);
+    }
+    return false; // Failed to show alternatives
+  };
 
   const resetBookingData = () => setBookingData({
     stationId: null,
@@ -56,7 +91,7 @@ export default function BookingModal({
   const timeSlots = generateTimeSlots();
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
       <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-8">
           <div className="flex items-center justify-between mb-6">
@@ -216,12 +251,23 @@ export default function BookingModal({
 
                     const createdBooking = await apiService.createBooking(bookingPayload);
                     console.log('Booking created successfully:', createdBooking);
-                    toast.success('Booking created successfully — status: Pending');
+                    toast.success(`Booking created successfully — status: ${createdBooking?.status || 'Pending'}`);
                     setSelectedStation(null);
                     setShowBookingModal(false);
                     resetBookingData();
                   } catch (error) {
                     console.error('Error creating booking:', error);
+
+                    // Check if it's a 409 conflict error with alternatives
+                    if (error?.status === 409 || error?.message?.includes('not available during your selected time')) {
+                      const showedAlternatives = await parseConflictError(error?.message || error?.detail || '');
+                      if (showedAlternatives) {
+                        // Don't show error toast if we successfully showed alternatives
+                        return;
+                      }
+                    }
+
+                    // Fallback to regular error handling
                     toast.error(error?.message || 'Failed to create booking. Please try again.');
                   }
                 }}
@@ -240,6 +286,27 @@ export default function BookingModal({
           </div>
         </div>
       </div>
+
+      {/* Alternative Slots Modal */}
+      <AlternativeSlotsModal
+        isOpen={showAlternatives}
+        onClose={() => setShowAlternatives(false)}
+        stations={alternativeStations}
+        darkMode={false} // User dashboard typically light mode
+        onSelectSlot={async (station) => {
+          // When user selects an alternative station, close current modal and navigate to that station
+          setShowAlternatives(false);
+          setSelectedStation(null);
+          setShowBookingModal(false);
+          resetBookingData();
+          // You could emit an event or callback here to navigate to the selected station
+          toast.success(`Selected ${station.name} as alternative. You can now book there.`);
+        }}
+        bookingDetails={bookingData}
+        lowBattery={lowBatteryMode}
+        title={lowBatteryMode ? "Low Battery - Fast Chargers" : "Available Charging Stations"}
+        message={lowBatteryMode ? "Your battery is low! We've prioritized the fastest chargers for you." : "Looking for nearby alternatives? Check out these available options."}
+      />
     </div>
   );
 }

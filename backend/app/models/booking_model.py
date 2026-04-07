@@ -11,7 +11,7 @@ class BookingBase(BaseModel):
     user_id: str
     start_time: datetime
     end_time: Optional[datetime] = None
-    status: str = "pending"  # pending, accepted, cancelled, completed, rejected
+    status: str = "pending"  # pending, confirmed, active, cancelled, completed
     current_battery_level: Optional[float] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

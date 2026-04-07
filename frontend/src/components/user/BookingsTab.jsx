@@ -1,21 +1,59 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Calendar, MapPin, Clock, Zap, Car } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import apiService from '../../services/api';
+import AlternativeSlotsModal from '../AlternativeSlotsModal';
 
 function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [], vehicles = [], onBookingUpdate }) {
   const toast = useToast();
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const [alternativeStations, setAlternativeStations] = useState([]);
+  const [alternativesLoading, setAlternativesLoading] = useState(false);
+  const [cancellingBooking, setCancellingBooking] = useState(null);
 
-  const handleCancelBooking = async (bookingId) => {
+  const handleCancelBooking = async (booking) => {
+    if (!booking?.id && !booking?.booking_id) return;
+
+    const bookingId = booking.id || booking.booking_id;
+
+    // First, fetch nearby stations with available slots
+    setAlternativesLoading(true);
+    try {
+      const stationsNearby = await apiService.getNearbyStations(booking.station_id, 5);
+      // Sort by distance in ascending order
+      const sorted = stationsNearby.sort((a, b) => (a.distance_km || Infinity) - (b.distance_km || Infinity));
+      setAlternativeStations(sorted);
+      setCancellingBooking(booking);
+      setShowAlternatives(true);
+    } catch (error) {
+      console.error('Failed to fetch nearby stations:', error);
+      // If fetching fails, proceed with cancellation anyway
+      await confirmCancellation(bookingId);
+    } finally {
+      setAlternativesLoading(false);
+    }
+  };
+
+  const confirmCancellation = async (bookingId) => {
     try {
       await apiService.cancelBooking(bookingId);
       toast.success('Booking cancelled successfully!');
       if (onBookingUpdate) {
         onBookingUpdate();
       }
+      setShowAlternatives(false);
+      setCancellingBooking(null);
     } catch (error) {
       console.error('Error cancelling booking:', error);
       toast.error(error?.message || 'Failed to cancel booking. Please try again.');
+    }
+  };
+
+  const handleConfirmCancellationWithoutAlternative = () => {
+    if (cancellingBooking) {
+      const bookingId = cancellingBooking.id || cancellingBooking.booking_id;
+      setShowAlternatives(false);
+      confirmCancellation(bookingId);
     }
   };
 
@@ -61,7 +99,7 @@ function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [],
 
   // Combine bookings and user sessions for display
   const itemsToShow = [
-    ...bookings.filter(b => b.status === 'pending' || b.status === 'accepted').map(b => ({ ...b, type: 'booking', total_cost: null })),
+    ...bookings.filter(b => b.status === 'pending' || b.status === 'confirmed').map(b => ({ ...b, type: 'booking', total_cost: null })),
     ...processedSessions
   ].sort((a, b) => {
     // Sort by start time, most recent first
@@ -69,6 +107,13 @@ function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [],
     const bTime = b.start_time || b.booking_start_time || new Date();
     return new Date(bTime) - new Date(aTime);
   });
+
+  const handleRebookAlternative = (slot) => {
+    // Close modal and suggest rebooking at selected station
+    setShowAlternatives(false);
+    toast.info(`Navigate to ${slot.station_name} to rebook your slot`);
+    // Can implement navigation to booking flow for selected station here
+  };
 
   return (
     <>
@@ -129,7 +174,8 @@ function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [],
                   <div className="text-right">
                     <div className={`px-3 py-1 rounded-full text-sm font-semibold mb-2 ${
                       item.status === 'completed' || (item.type === 'session') ? 'bg-blue-100 text-blue-700' :
-                      item.status === 'confirmed' || item.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' :
+                      item.status === 'active' ? 'bg-purple-100 text-purple-700' :
+                      item.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
                       item.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
                       'bg-red-100 text-red-700'
                     }`}>
@@ -170,7 +216,7 @@ function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [],
                   <div className="flex gap-2">
                     {item.type === 'booking' && item.status === 'pending' && (
                       <button
-                        onClick={() => handleCancelBooking(item.id)}
+                        onClick={() => handleCancelBooking(item)}
                         className="px-4 py-2 border border-red-300 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition-colors"
                       >
                         Cancel Booking
@@ -192,6 +238,22 @@ function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [],
             </div>
           ))}
         </div>
+      )}
+
+      {showAlternatives && (
+        <AlternativeSlotsModal
+          isOpen={showAlternatives}
+          onClose={() => {
+            setShowAlternatives(false);
+            handleConfirmCancellationWithoutAlternative();
+          }}
+          stations={alternativeStations}
+          loading={alternativesLoading}
+          onSelectSlot={handleRebookAlternative}
+          title="Cancel & Rebook"
+          message={`Looking for nearby charging stations? We found ${alternativeStations.length} alternatives. Choose one to keep your journey charged!`}
+          lowBattery={false}
+        />
       )}
     </>
   );

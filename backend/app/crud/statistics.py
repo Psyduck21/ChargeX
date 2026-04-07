@@ -48,7 +48,7 @@ async def list_stations() -> List[Dict[str, Any]]:
     active_sessions_response = supabase.table("charging_sessions").select("slot_id").is_("end_time", None).execute()
     occupied_slot_ids = set()
     if active_sessions_response.data:
-        occupied_slot_ids = {str(session.get("slot")) for session in active_sessions_response.data if session.get("slot")}
+        occupied_slot_ids = {str(session.get("slot_id")) for session in active_sessions_response.data if session.get("slot_id")}
 
     # For each station, calculate available and total slots from charging_slots table
     for station in stations:

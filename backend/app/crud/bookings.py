@@ -11,7 +11,7 @@ async def request_slot_booking(booking_data: BookingCreate) -> Optional[BookingO
     """Create a booking with server-side overlap validation.
 
     This function will check for existing blocking bookings on the same slot
-    (statuses: pending, accepted) and reject the creation if a time overlap is found.
+    (statuses: pending, confirmed, active) and reject the creation if a time overlap is found.
     It raises an exception on validation failure so callers (routers) can return
     appropriate HTTP errors.
     """
@@ -43,10 +43,30 @@ async def request_slot_booking(booking_data: BookingCreate) -> Optional[BookingO
         raise ValueError("end_time must be after start_time")
 
     slot_id = booking_dict.get('slot_id')
+    # If slot specified, check if slot/station is under maintenance
+    if slot_id:
+        try:
+            # Check slot status
+            slot_resp = supabase.table("charging_slots").select("status, station_id").eq("id", str(slot_id)).single().execute()
+            slot_data = slot_resp.data
+            if slot_data:
+                if slot_data.get("status") == "under_maintenance":
+                    raise ValueError(f"Slot {slot_id} is currently under maintenance and unavailable for booking")
+
+                # Check station status
+                station_resp = supabase.table("stations").select("status").eq("id", str(slot_data.get("station_id"))).single().execute()
+                station_data = station_resp.data
+                if station_data and station_data.get("status") == "under_maintenance":
+                    raise ValueError(f"Station is currently under maintenance and unavailable for booking")
+        except httpx.HTTPError as e:
+            print(f"Error checking slot/station status for slot {slot_id}: {e}")
+            # re-raise to be handled by router
+            raise
+
     # If slot specified, ensure no overlapping blocking bookings exist
     if slot_id:
         try:
-            blocking_statuses = ["accepted", "pending"]
+            blocking_statuses = ["confirmed", "active", "pending"]
             resp = supabase.table("bookings").select("*").eq("slot_id", str(slot_id)).in_("status", blocking_statuses).execute()
             existing = resp.data or []
             for b in existing:
@@ -68,7 +88,11 @@ async def request_slot_booking(booking_data: BookingCreate) -> Optional[BookingO
         if isinstance(end_dt, datetime):
             booking_dict['end_time'] = end_dt.isoformat()
 
-        booking_dict['status'] = 'pending'
+        battery_level = booking_dict.get('current_battery_level')
+        if battery_level is not None and float(battery_level) < 15.0:
+            booking_dict['status'] = 'confirmed'
+        else:
+            booking_dict['status'] = 'pending'
         response = supabase.table("bookings").insert(booking_dict).execute()
         created = (response.data or [None])[0]
         if not created:
@@ -99,7 +123,7 @@ async def get_pending_bookings(station_id: UUID) -> List[BookingOut]:
 
 # Manager accepts or rejects a booking
 async def manager_update_booking_status(booking_id: UUID, status: str) -> Optional[BookingOut]:
-    assert status in ["accepted", "rejected"], "Status must be 'accepted' or 'rejected'"
+    assert status in ["confirmed", "rejected"], "Status must be 'confirmed' or 'rejected'"
     try:
         supabase = await get_supabase_client()
         response = supabase.table("bookings").update({"status": status}).eq("id", str(booking_id)).execute()
@@ -111,7 +135,7 @@ async def manager_update_booking_status(booking_id: UUID, status: str) -> Option
 
 
 async def accept_booking_atomic(booking_id: UUID, manager_id: UUID) -> Optional[BookingOut]:
-    """Attempt to accept a booking atomically: ensure no overlapping accepted booking exists for the same slot
+    """Attempt to confirm a booking atomically: ensure no overlapping confirmed booking exists for the same slot
     and that the manager actually manages the station for this booking. Uses service-role client to avoid
     permission issues when reading other rows.
     Returns the updated BookingOut on success, or None on failure (conflict / not authorized).
@@ -154,19 +178,19 @@ async def accept_booking_atomic(booking_id: UUID, manager_id: UUID) -> Optional[
                 print(f"accept_booking_atomic: manager {manager_id} does not manage station {station_id}")
                 return None
 
-            # Get accepted bookings for same slot and check for overlap
-            accepted_resp = supabase.table("bookings").select("*").eq("slot_id", slot_id).eq("status", "accepted").execute()
-            accepted = accepted_resp.data or []
+            # Get confirmed bookings for same slot and check for overlap
+            confirmed_resp = supabase.table("bookings").select("*").eq("slot_id", slot_id).eq("status", "confirmed").execute()
+            confirmed = confirmed_resp.data or []
 
-            for a in accepted:
+            for a in confirmed:
                 a_start = a.get("start_time")
                 a_end = a.get("end_time")
                 if not (a_end <= start_time or a_start >= end_time):
-                    print(f"accept_booking_atomic: overlapping accepted booking {a.get('id')} found for slot {slot_id}")
+                    print(f"accept_booking_atomic: overlapping confirmed booking {a.get('id')} found for slot {slot_id}")
                     return None
 
-            # No overlap and manager authorized — accept booking
-            upd = supabase.table("bookings").update({"status": "accepted"}).eq("id", str(booking_id)).execute()
+            # No overlap and manager authorized — confirm booking
+            upd = supabase.table("bookings").update({"status": "confirmed"}).eq("id", str(booking_id)).execute()
             updated = (upd.data or [None])[0]
             return BookingOut(**updated) if updated else None
         except Exception as e2:
@@ -278,7 +302,7 @@ async def list_bookings(user_id: Optional[UUID] = None) -> List[BookingOut]:
 
 
 async def activate_started_bookings() -> Dict[str, Any]:
-    """Activate all accepted bookings that have reached their start_time.
+    """Activate all confirmed bookings that have reached their start_time.
 
     Returns:
         Dict containing the number of bookings activated.

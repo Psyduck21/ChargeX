@@ -149,6 +149,23 @@ async def remove_station(station_id: UUID, current_user: dict = Depends(get_curr
 
 
 # ------------------------
+# ✅ Nearby Stations
+# ------------------------
+
+@router.get("/{station_id}/nearby", response_model=List[StationOut], dependencies=[Depends(get_current_user)])
+async def get_nearby_stations(station_id: UUID, limit: int = 5, sort_by: str = "distance"):
+    """Get nearby stations with available slots, sorted by distance or power (for low battery)"""
+    from ..crud.station import find_nearby_stations
+    
+    try:
+        nearby = await find_nearby_stations(str(station_id), limit=limit, sort_by=sort_by)
+        return nearby
+    except Exception as e:
+        print(f"Error fetching nearby stations: {e}")
+        raise HTTPException(status_code=400, detail="Failed to fetch nearby stations")
+
+
+# ------------------------
 # ✅ Station Manager Handling
 # ------------------------
 

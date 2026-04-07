@@ -3,6 +3,7 @@ from typing import Any, List, Dict
 from uuid import UUID
 from ..dependencies import get_current_user
 from ..crud.bookings import list_bookings, create_booking, get_booking, update_booking, accept_booking_atomic, complete_expired_bookings
+from ..crud.station import find_nearby_stations
 from ..crud.profiles import get_user_profile
 from ..utils.logger import log_activity
 from ..models.booking_model import BookingCreate, BookingOut, BookingUpdate
@@ -44,7 +45,21 @@ async def add_booking(request: Request, current_user: Any = Depends(get_current_
         # Handle booking validation errors with user-friendly messages
         error_msg = str(e)
         if "unavailable between" in error_msg or "due to booking" in error_msg:
-            raise HTTPException(status_code=409, detail="This charging slot is not available during your selected time. Please choose a different time or slot.")
+            nearby = await find_nearby_stations(str(booking.station_id))
+            if nearby:
+                suggestions = ", ".join([f"{st['name']} ({st['distance_km']} km)" for st in nearby])
+                detail_msg = f"This charging slot is not available during your selected time. We suggest the following nearby stations with available slots: {suggestions}."
+            else:
+                detail_msg = "This charging slot is not available during your selected time. Please choose a different time or slot."
+            raise HTTPException(status_code=409, detail=detail_msg)
+        elif "under maintenance" in error_msg:
+            nearby = await find_nearby_stations(str(booking.station_id))
+            if nearby:
+                suggestions = ", ".join([f"{st['name']} ({st['distance_km']} km)" for st in nearby])
+                detail_msg = f"This charging slot is currently under maintenance. We suggest the following nearby stations with available slots: {suggestions}."
+            else:
+                detail_msg = "This charging slot is currently under maintenance. Please try a different station."
+            raise HTTPException(status_code=409, detail=detail_msg)
         elif "start_time and end_time are required" in error_msg:
             raise HTTPException(status_code=400, detail="Please select valid start and end times for your booking.")
         elif "end_time must be after start_time" in error_msg:
@@ -90,10 +105,10 @@ async def update_booking_item(booking_id: UUID, update: BookingUpdate, current_u
         raise HTTPException(status_code=403, detail="Not authorized to modify this booking")
 
     # If manager attempts to accept a booking, perform an atomic accept that checks for overlaps
-    if user_role == "station_manager" and update.status == "accepted":
+    if user_role == "station_manager" and update.status == "confirmed":
         accepted = await accept_booking_atomic(booking_id, user_id)
         if not accepted:
-            raise HTTPException(status_code=409, detail="Could not accept booking: a conflicting accepted booking exists or you are not authorized")
+            raise HTTPException(status_code=409, detail="Could not confirm booking: a conflicting confirmed booking exists or you are not authorized")
         return accepted
 
     # For all other updates, ensure if user is station_manager they actually manage the station
@@ -104,22 +119,22 @@ async def update_booking_item(booking_id: UUID, update: BookingUpdate, current_u
         if not getattr(station_check, 'data', None):
             raise HTTPException(status_code=403, detail="Not authorized to modify bookings for this station")
 
-    # Booking Rejection Logic with Safety Checks and Alternative Stations
-    if user_role == "station_manager" and update.status == "rejected":
+    # Booking Cancellation Logic with Safety Checks and Alternative Stations
+    if user_role == "station_manager" and update.status == "cancelled":
         # Check current battery if provided, or fetch it from existing DB record
         btry = update.current_battery_level if update.current_battery_level is not None else getattr(existing, "current_battery_level", None)
         if hasattr(existing, "dict"):
             btry = existing.dict().get("current_battery_level", btry)
             
         if btry is not None and float(btry) < 15.0:
-            raise HTTPException(status_code=400, detail="Cannot reject booking: User vehicle battery is dangerously low (<15%). Recommend acceptance for safety.")
+            raise HTTPException(status_code=400, detail="Cannot cancel booking: User vehicle battery is dangerously low (<15%). Recommend confirmation for safety.")
 
     updated = await update_booking(booking_id, update)
     if not updated:
         raise HTTPException(status_code=400, detail="Failed to update booking")
 
-    # If rejected, append the nearest available station to the response
-    if update.status == "rejected" and user_role == "station_manager":
+    # If cancelled, append the nearest available station to the response
+    if update.status == "cancelled" and user_role == "station_manager":
         try:
             from ..crud.station import find_nearest_station
             nearest = await find_nearest_station(str(existing.station_id))

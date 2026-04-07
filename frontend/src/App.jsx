@@ -77,7 +77,7 @@ function AppContent() {
         />
       )}
       {view === 'signup' && (
-        <ProfessionalSignup 
+        <ProfessionalSignup
           onSwitchToLogin={() => setView('login')}
           onSignup={async (userData) => {
             try {

@@ -90,7 +90,8 @@ CREATE TABLE public.bookings (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
     slot uuid NOT NULL,
-    CONSTRAINT bookings_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text, 'completed'::text])))
+    CONSTRAINT bookings_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text, 'completed'::text, 'active'::text]))),
+    CONSTRAINT bookings_slot_time_composite_key UNIQUE (slot, start_time, end_time)
 );
 
 ALTER TABLE public.bookings OWNER TO postgres;

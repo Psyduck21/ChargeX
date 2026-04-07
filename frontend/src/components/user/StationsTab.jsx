@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Search, Filter, Navigation, Star, Clock, Battery, DollarSign, Calendar, ChevronRight, Heart, User, Bell, Settings, LogOut, Menu, X, Bookmark, History, CreditCard, Phone, Mail, AlertCircle, Car, Plus, Edit2, Trash2, BarChart3, TrendingUp, Leaf, ChevronDown, Zap } from 'lucide-react';
 import StationCard from './StationCard';
-import UserDashboardMap from './UserDashboardMap';
 import { Map } from 'lucide-react';
+import UserDashboardMap from './UserDashboardMap';
+import BookingModal from './BookingModal';
 import apiService from '../../services/api';
 
 function StationsTab({
@@ -18,7 +19,12 @@ function StationsTab({
   vehicles,
   onBookStation,
   onGetDirections,
+  locationPermission,
+  requestLocationPermission,
+  darkMode
 }) {
+  const [showMapBookingModal, setShowMapBookingModal] = useState(false);
+  const [selectedStationForMapBooking, setSelectedStationForMapBooking] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
   const [userLocation, setUserLocation] = useState(null);
@@ -27,6 +33,17 @@ function StationsTab({
     totalEnergy: 0,
     totalSpent: 0,
     co2Saved: '0 kg'
+  });
+  const [bookingData, setBookingData] = useState({
+    stationId: null,
+    vehicleId: null,
+    slotId: null,
+    connectorType: '',
+    currentBattery: 50,
+    date: new Date().toISOString().split('T')[0],
+    timeSlot: '',
+    duration: 2,
+    estimatedCost: 0
   });
 
   // Fetch user statistics on component mount
@@ -51,13 +68,20 @@ function StationsTab({
     fetchUserStats();
 
     // Get user's current location once
-    if (navigator.geolocation && locationPermission !== 'denied') {
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
         },
-        () => {}
+        (error) => {
+          console.log('Geolocation unavailable:', error);
+          // Set a default location (e.g., city center) if geolocation fails
+          setUserLocation({ lat: 40.7128, lng: -74.0060 }); // NYC as default
+        }
       );
+    } else {
+      // Geolocation not supported - set default
+      setUserLocation({ lat: 40.7128, lng: -74.0060 }); // NYC as default
     }
   }, [locationPermission]);
 
@@ -144,11 +168,10 @@ function StationsTab({
                     <button
                       key={rating}
                       onClick={() => setFilters({ ...filters, rating: rating })}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                        filters.rating === rating
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${filters.rating === rating
                           ? 'bg-emerald-600 text-white'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                        }`}
                     >
                       {rating === 0 ? 'Any' : `${rating}+`}
                     </button>
@@ -319,8 +342,18 @@ function StationsTab({
           stations={filteredStations}
           userLocation={userLocation}
           onBookStation={onBookStation}
+          onOpenBookingModal={(station) => {
+            setSelectedStationForMapBooking(station);
+            setShowMapBookingModal(true);
+          }}
           onGetDirections={onGetDirections}
           darkMode={darkMode}
+          showBookingModal={showMapBookingModal}
+          selectedStationForBooking={selectedStationForMapBooking}
+          onCloseBookingModal={() => {
+            setShowMapBookingModal(false);
+            setSelectedStationForMapBooking(null);
+          }}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -338,6 +371,18 @@ function StationsTab({
       )}
 
       <FilterPanel />
+
+      {/* Map Booking Modal */}
+      {showMapBookingModal && (
+        <BookingModal
+          selectedStation={selectedStationForMapBooking}
+          bookingData={bookingData}
+          setBookingData={setBookingData}
+          setSelectedStation={setSelectedStationForMapBooking}
+          setShowBookingModal={setShowMapBookingModal}
+          vehicles={vehicles}
+        />
+      )}
     </>
   );
 }

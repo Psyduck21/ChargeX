@@ -486,6 +486,11 @@ class ApiService {
   async getManagersWithStations() {
     return this.apiCall('/station_managers/admin/all-with-stations', { method: 'GET' });
   }
+
+  // Nearby Stations APIs
+  async getNearbyStations(stationId, limit = 5, sortBy = "distance") {
+    return this.apiCall(`/stations/${stationId}/nearby?limit=${limit}&sort_by=${sortBy}`, { method: 'GET' });
+  }
 }
 
 // Create and export a singleton instance

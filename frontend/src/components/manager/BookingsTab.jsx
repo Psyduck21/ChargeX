@@ -49,10 +49,10 @@ export default function BookingsTab({
   const getStatusColor = (status) => {
     switch ((status || '').toLowerCase()) {
       case 'pending': return 'bg-orange-500 text-white dark:bg-orange-500 dark:text-white';
-      case 'accepted': return 'bg-yellow-500 text-white dark:bg-yellow-500 dark:text-white';
+      case 'confirmed': return 'bg-yellow-500 text-white dark:bg-yellow-500 dark:text-white';
       case 'active': return 'bg-blue-500 text-white dark:bg-blue-500 dark:text-white';
       case 'completed': return 'bg-green-500 text-white dark:bg-green-500 dark:text-white';
-      case 'rejected': return 'bg-red-500 text-white dark:bg-red-500 dark:text-white';
+      case 'cancelled': return 'bg-red-500 text-white dark:bg-red-500 dark:text-white';
       default: return 'bg-gray-500 text-white dark:bg-gray-500 dark:text-white';
     }
   };
@@ -85,10 +85,10 @@ export default function BookingsTab({
           >
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
-            <option value="accepted">Accepted</option>
+            <option value="confirmed">Confirmed</option>
             <option value="active">Active</option>
             <option value="completed">Completed</option>
-            <option value="rejected">Rejected</option>
+            <option value="cancelled">Cancelled</option>
           </select>
 
           <div className="flex items-center gap-2">
@@ -126,7 +126,7 @@ export default function BookingsTab({
           { label: 'Active', value: statusStats.active, bgClass: 'bg-blue-500', iconClass: 'text-white', darkBgClass: 'dark:bg-blue-500', darkIconClass: 'dark:text-white' },
           { label: 'Completed', value: statusStats.completed, bgClass: 'bg-green-500', iconClass: 'text-white', darkBgClass: 'dark:bg-green-500', darkIconClass: 'dark:text-white' },
           { label: 'Pending', value: statusStats.pending, bgClass: 'bg-orange-500', iconClass: 'text-white', darkBgClass: 'dark:bg-orange-500', darkIconClass: 'dark:text-white' },
-          { label: 'Accepted', value: statusStats.accepted, bgClass: 'bg-yellow-500', iconClass: 'text-white', darkBgClass: 'dark:bg-yellow-500', darkIconClass: 'dark:text-white' },
+          { label: 'Confirmed', value: statusStats.confirmed, bgClass: 'bg-yellow-500', iconClass: 'text-white', darkBgClass: 'dark:bg-yellow-500', darkIconClass: 'dark:text-white' },
         ].map((card) => (
           <div key={card.label} className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-4 md:p-5 border`}>
             <div className="flex items-center gap-3">

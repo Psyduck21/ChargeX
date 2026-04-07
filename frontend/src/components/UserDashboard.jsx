@@ -451,7 +451,7 @@ function ChargeXUserDashboard({ onLogout }) {
 
 
         // Filter bookings for this station and sensible statuses
-        const stationBookings = bookings.filter(b => String(b.station_id) === String(selectedStation.id) && b.status !== 'rejected' && b.status !== 'cancelled');
+        const stationBookings = bookings.filter(b => String(b.station_id) === String(selectedStation.id) && b.status !== 'cancelled');
 
         const requestedStart = bookingData.timeSlot ? new Date(`${bookingData.date}T${bookingData.timeSlot}`) : null;
         const requestedEnd = requestedStart ? new Date(requestedStart.getTime() + bookingData.duration * 60 * 60 * 1000) : null;

@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
 import { X, Calendar, MapPin, Car, Zap, Clock, User, CreditCard } from 'lucide-react';
 import apiService from '../../services/api';
+import AlternativeSlotsModal from '../AlternativeSlotsModal';
 
 export default function BookingDetailsModal({ booking, isOpen, onClose, onUpdate, darkMode = false }) {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const [alternativeStations, setAlternativeStations] = useState([]);
+  const [alternativesLoading, setAlternativesLoading] = useState(false);
   if (!isOpen || !booking) return null;
 
   const getStatusColor = (status) => {
     switch ((status || '').toLowerCase()) {
       case 'pending': return 'bg-orange-500 text-white';
-      case 'accepted': return 'bg-yellow-500 text-white';
+      case 'confirmed': return 'bg-yellow-500 text-white';
       case 'active': return 'bg-blue-500 text-white';
       case 'completed': return 'bg-green-500 text-white';
-      case 'rejected': return 'bg-red-500 text-white';
+      case 'cancelled': return 'bg-red-500 text-white';
       default: return 'bg-gray-500 text-white';
     }
   };
@@ -25,20 +29,45 @@ export default function BookingDetailsModal({ booking, isOpen, onClose, onUpdate
   const handleRejectBooking = async () => {
     if (!booking?.id && !booking?.booking_id) return;
 
+    // First, fetch nearby stations with available slots
+    setAlternativesLoading(true);
+    try {
+      const stations = await apiService.getNearbyStations(booking.station_id, 5);
+      // Sort by distance in ascending order
+      const sorted = stations.sort((a, b) => (a.distance_km || Infinity) - (b.distance_km || Infinity));
+      setAlternativeStations(sorted);
+      setShowAlternatives(true);
+    } catch (error) {
+      console.error('Failed to fetch nearby stations:', error);
+      // If fetching fails, proceed with rejection anyway
+      confirmRejection();
+    } finally {
+      setAlternativesLoading(false);
+    }
+  };
+
+  const confirmRejection = async () => {
+    if (!booking?.id && !booking?.booking_id) return;
+
     setIsUpdating(true);
     try {
-      await apiService.updateBooking(booking.id || booking.booking_id, { status: 'rejected' });
+      await apiService.updateBooking(booking.id || booking.booking_id, { status: 'cancelled' });
       if (onUpdate) {
         await onUpdate();
       }
+      setShowAlternatives(false);
       onClose();
     } catch (error) {
       console.error('Failed to reject booking:', error);
-      // Could show a toast notification here
       alert('Failed to reject booking. Please try again.');
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const handleConfirmRejectionWithoutAlternative = () => {
+    setShowAlternatives(false);
+    confirmRejection();
   };
 
   return (
@@ -188,6 +217,21 @@ export default function BookingDetailsModal({ booking, isOpen, onClose, onUpdate
           </div>
         </div>
       </div>
+
+      {/* Alternative Slots Modal */}
+      <AlternativeSlotsModal
+        isOpen={showAlternatives}
+        onClose={() => setShowAlternatives(false)}
+        stations={alternativeStations}
+        darkMode={darkMode}
+        onSelectSlot={async (station) => {
+          // Manager can see alternatives but still needs to confirm rejection
+          // After selection, proceed with rejection
+          setShowAlternatives(false);
+          confirmRejection();
+        }}
+        bookingDetails={booking}
+      />
     </div>
   );
 }
