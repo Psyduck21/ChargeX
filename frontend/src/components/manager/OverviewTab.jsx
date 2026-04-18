@@ -15,6 +15,7 @@ export default function OverviewTab({
   darkMode = false
 }) {
   const [chargingSessions, setChargingSessions] = useState([]);
+  const [slotsByStation, setSlotsByStation] = useState({});
 
   useEffect(() => {
     const fetchChargingSessions = async () => {
@@ -35,9 +36,50 @@ export default function OverviewTab({
     return () => clearInterval(interval);
   }, []);
 
-  const totalSlots = stations.reduce((sum, s) => sum + s.capacity, 0);
-  const availableSlots = stations.reduce((sum, s) => sum + s.available_slots, 0);
-  const occupiedSlots = stations.reduce((sum, s) => sum + (s.capacity - s.available_slots), 0);
+  useEffect(() => {
+    const fetchSlotsForStations = async () => {
+      if (!stations || stations.length === 0) {
+        setSlotsByStation({});
+        return;
+      }
+
+      const slotsData = {};
+      await Promise.all(
+        stations.map(async (station) => {
+          const stationId = station.id || station.station_id;
+          if (!stationId) return;
+          try {
+            const stationSlots = await apiService.getSlots(stationId);
+            slotsData[stationId] = stationSlots || [];
+          } catch (error) {
+            console.error(`Failed to fetch slots for station ${stationId}:`, error);
+            slotsData[stationId] = [];
+          }
+        })
+      );
+      setSlotsByStation(slotsData);
+    };
+
+    fetchSlotsForStations();
+  }, [stations]);
+
+  const totalSlots = stations.reduce((sum, s) => {
+    const stationId = s.id || s.station_id;
+    const stationSlots = stationId ? slotsByStation[stationId] || [] : [];
+    return sum + stationSlots.length;
+  }, 0);
+
+  const availableSlots = stations.reduce((sum, s) => {
+    const stationId = s.id || s.station_id;
+    const stationSlots = stationId ? slotsByStation[stationId] || [] : [];
+    return sum + stationSlots.filter(slot => slot.status === 'available').length;
+  }, 0);
+
+  const occupiedSlots = stations.reduce((sum, s) => {
+    const stationId = s.id || s.station_id;
+    const stationSlots = stationId ? slotsByStation[stationId] || [] : [];
+    return sum + stationSlots.filter(slot => slot.status === 'occupied').length;
+  }, 0);
 
   // Calculate today's revenue and energy from charging sessions
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -60,10 +102,10 @@ export default function OverviewTab({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        <StatCard
+        <StatCard                                y6g5f4ddg
           title="Total Slots"
           value={totalSlots}
-          subtitle={`${availableSlots} available`}
+          subtitle={`${occupiedSlots} occupied`}
           icon={MapPin}
           color="bg-blue-600"
           tooltip="Total charging slots across all your stations"
@@ -172,16 +214,22 @@ export default function OverviewTab({
         ) : (
           <div className="space-y-4">
             {stations.map((station, index) => {
+              const stationId = station.id || station.station_id;
+              const stationSlots = stationId ? slotsByStation[stationId] || [] : [];
+              const stationAvailable = stationSlots.filter(slot => slot.status === 'available').length;
+              const stationOccupied = stationSlots.filter(slot => slot.status === 'occupied').length;
+              const stationTotal = stationSlots.length;
+
               // Calculate today's revenue and energy for this station from charging sessions
               // Use string comparison to handle both UUID objects and strings
               const stationTodaysSessions = todaysSessions.filter(session =>
-                String(session.station_id) === String(station.station_id)
+                String(session.station_id) === String(stationId)
               );
               const stationRevenue = stationTodaysSessions.reduce((sum, session) => sum + (session.cost || 0), 0);
               const stationEnergy = stationTodaysSessions.reduce((sum, session) => sum + (session.energy_consumed || 0), 0);
 
               return (
-                <div key={station.station_id || `station-${index}`} className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-xl p-4 transition-colors`}>
+                <div key={stationId || `station-${index}`} className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-xl p-4 transition-colors`}>
                   <div className="flex flex-col md:flex-row md:items-center justify-between mb-3 gap-3">
                     <div>
                       <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{station.name}</h4>
@@ -191,7 +239,7 @@ export default function OverviewTab({
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-emerald-600">{station.available_slots}</p>
+                      <p className="text-2xl font-bold text-emerald-600">{stationAvailable}</p>
                       <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Available</p>
                     </div>
                   </div>
@@ -199,11 +247,11 @@ export default function OverviewTab({
                     <div className="grid grid-cols-2 gap-3">
                       <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
                         <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Total Slots</p>
-                        <p className="text-lg font-bold text-blue-600">{station.capacity}</p>
+                        <p className="text-lg font-bold text-blue-600">{stationTotal}</p>
                       </div>
                       <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-3`}>
                         <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Occupied</p>
-                        <p className="text-lg font-bold text-red-600">{station.capacity - station.available_slots}</p>
+                        <p className="text-lg font-bold text-red-600">{stationOccupied}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">

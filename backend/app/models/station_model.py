@@ -37,7 +37,7 @@ class StationCreate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     capacity: Optional[int] = None
-    available_slots: Optional[int] = None
+    total_slots: Optional[int] = None
 
 
 class StationUpdate(BaseModel):
@@ -49,7 +49,6 @@ class StationUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     capacity: Optional[int] = None
-    available_slots: Optional[int] = None
     total_slots: Optional[int] = None
     price_per_hour: Optional[float] = None
     charger_types: Optional[List[str]] = None

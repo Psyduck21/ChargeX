@@ -178,9 +178,4 @@ async def get_recent_activity_api(limit: int = 10, current_user: dict = Depends(
     return activity
 
 
-@router.get("/co2-saved", dependencies=[Depends(require_admin_or_manager)])
-async def get_co2_saved_api(current_user: dict = Depends(get_current_user)):
-    """Get CO2 saved from EV charging this month"""
-    co2 = await calculate_co2_saved()
 
-    return {"co2_saved": co2}

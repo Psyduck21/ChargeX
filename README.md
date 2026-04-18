@@ -20,6 +20,7 @@ A comprehensive smart electric vehicle charging station management system that e
 - **App User**: Book charging slots, view personal bookings and sessions
 
 ### Technical Features
+- **AI-Powered Booking Assistant**: Intelligent agent using Ollama for natural language booking assistance
 - **Modern UI**: Built with React 19 and Tailwind CSS
 - **RESTful API**: FastAPI backend with comprehensive endpoints
 - **Database Integration**: Supabase for data persistence
@@ -47,6 +48,8 @@ A comprehensive smart electric vehicle charging station management system that e
 - **Supabase** - Backend-as-a-Service for database and authentication
 - **Pydantic** - Data validation and settings management
 - **Uvicorn** - ASGI server for running the application
+- **Ollama** - Local AI model runtime for intelligent booking assistance
+- **LangChain** - Framework for building AI applications
 
 ### Frontend
 - **React 19** - Modern JavaScript library for building user interfaces
@@ -100,10 +103,11 @@ ChargeX/
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.12+
-- Node.js 18+
-- npm or yarn
-- Supabase account
+- **Python 3.12+** - Download from [python.org](https://python.org)
+- **Node.js 18+** - Download from [nodejs.org](https://nodejs.org)
+- **npm** or **yarn** (comes with Node.js)
+- **Ollama** - For AI agent functionality
+- **Supabase account** - Sign up at [supabase.com](https://supabase.com)
 
 ### Installation
 
@@ -113,49 +117,160 @@ ChargeX/
    cd ChargeX
    ```
 
-2. **Backend Setup**
+2. **Install and Set Up Ollama**
+
+   #### Windows
+   ```cmd
+   # Download and install Ollama from https://ollama.ai/download
+   # Or use winget:
+   winget install Ollama.Ollama
+   
+   # Start Ollama service
+   ollama serve
+   
+   # In a new terminal, pull the required model
+   ollama pull qwen2.5:3b
+   ```
+
+   #### Linux
    ```bash
+   # Install Ollama
+   curl -fsSL https://ollama.ai/install.sh | sh
+   
+   # Start Ollama service (runs in background)
+   ollama serve &
+   
+   # Pull the required model
+   ollama pull qwen2.5:3b
+   ```
+
+   #### macOS
+   ```bash
+   # Install Ollama using Homebrew
+   brew install ollama
+   
+   # Start Ollama service
+   ollama serve &
+   
+   # Pull the required model
+   ollama pull qwen2.5:3b
+   ```
+
+   **Note**: The AI agent uses the `qwen2.5:3b` model for intelligent booking assistance. Make sure Ollama is running before starting the backend.
+
+3. **Backend Setup**
+
+   #### Windows
+   ```cmd
    # Create virtual environment
    python -m venv myenv
-   source myenv/bin/activate  # On Windows: myenv\Scripts\activate
+   
+   # Activate virtual environment
+   myenv\Scripts\activate
    
    # Install dependencies
    pip install -r requirements.txt
-   
-   # Set up environment variables
-   cp .env.example .env
-   # Edit .env with your Supabase credentials
    ```
 
-3. **Frontend Setup**
+   #### Linux/macOS
+   ```bash
+   # Create virtual environment
+   python -m venv myenv
+   
+   # Activate virtual environment
+   source myenv/bin/activate
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   ```
+
+3. **Frontend Setup** (Same for all platforms)
    ```bash
    cd frontend
    npm install
    ```
 
 4. **Database Setup**
-   - Create a new Supabase project
-   - Set up the database schema (see Database Schema section)
-   - Update your `.env` file with Supabase credentials
+   - Create a new Supabase project at [supabase.com](https://supabase.com)
+   - Set up the database schema using the migrations in `supabase/migrations/`
+   - Update your `.env` file with Supabase credentials (see Configuration section)
 
 ### Running the Application
+
+#### Windows
+
+1. **Start the Backend**
+   ```cmd
+   cd backend
+   myenv\Scripts\activate
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+2. **Start the Frontend** (in a new terminal)
+   ```cmd
+   cd frontend
+   npm run dev
+   ```
+
+#### Linux/macOS
 
 1. **Start the Backend**
    ```bash
    cd backend
+   source myenv/bin/activate
    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-2. **Start the Frontend**
+2. **Start the Frontend** (in a new terminal)
    ```bash
    cd frontend
    npm run dev
    ```
 
-3. **Access the Application**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+#### Accessing the Application
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+
+### Platform-Specific Notes
+
+#### Windows
+- Ensure Python is added to your PATH during installation
+- Use Command Prompt or PowerShell (not Git Bash for activation)
+- If you encounter permission errors, run Command Prompt as Administrator
+- For virtual environment activation, use `myenv\Scripts\activate` (not `myenv/bin/activate`)
+- **Ollama**: May require administrator privileges for installation. Use PowerShell for better compatibility.
+
+#### Linux
+- Python 3.12+ is usually available via package manager:
+  ```bash
+  # Ubuntu/Debian
+  sudo apt update
+  sudo apt install python3.12 python3.12-venv
+  
+  # CentOS/RHEL
+  sudo yum install python312 python312-venv
+  ```
+- Ensure your firewall allows connections on ports 5173 and 8000
+- **Ollama**: The install script handles most dependencies. If you encounter GPU-related issues, install appropriate drivers.
+
+#### macOS
+- Install Python 3.12+ using Homebrew:
+  ```bash
+  brew install python@3.12
+  ```
+- Node.js can be installed via Homebrew:
+  ```bash
+  brew install node
+  ```
+- If you encounter permission issues with npm, you may need to change npm's default directory:
+  ```bash
+  mkdir ~/.npm-global
+  npm config set prefix '~/.npm-global'
+  export PATH=~/.npm-global/bin:$PATH
+  # Add the export to your ~/.bash_profile or ~/.zshrc
+  ```
+- **Ollama**: Works well with Apple Silicon Macs. Use `brew services start ollama` for automatic startup.
 
 ## 🔧 Configuration
 
@@ -309,6 +424,46 @@ For support and questions:
    - Clear node_modules and reinstall
    - Check Node.js version compatibility
    - Verify all dependencies are installed
+
+5. **Ollama/AI Agent Issues**
+   - Ensure Ollama is running: `ollama serve`
+   - Verify model is downloaded: `ollama list`
+   - Check if port 11434 is available (Ollama's default port)
+   - Restart Ollama service if the agent can't connect
+
+### Platform-Specific Issues
+
+#### Windows
+- **Virtual Environment Issues**: If `myenv\Scripts\activate` fails, ensure you're using Command Prompt or PowerShell, not Git Bash
+- **Permission Errors**: Run Command Prompt as Administrator or use `python -m pip install --user` for global packages
+- **Path Issues**: Ensure Python and npm are in your PATH. You may need to restart Command Prompt after installation
+- **Port Conflicts**: If ports 5173 or 8000 are in use, change them in the commands (e.g., `--port 8001`)
+- **Ollama**: If installation fails, try downloading directly from the Ollama website. Ensure antivirus doesn't block it.
+
+#### Linux
+- **Permission Issues**: If you get permission errors with npm, you may need to install packages globally or change npm's default directory:
+  ```bash
+  mkdir ~/.npm-global
+  npm config set prefix '~/.npm-global'
+  export PATH=~/.npm-global/bin:$PATH
+  ```
+- **Python Version**: Ensure you're using Python 3.12+, not the system Python 2.x
+- **Firewall**: Ensure ports 5173 and 8000 are open: `sudo ufw allow 5173` and `sudo ufw allow 8000`
+- **Ollama**: If GPU acceleration doesn't work, Ollama will fall back to CPU. Check system logs with `journalctl -u ollama`
+
+#### macOS
+- **Python Installation**: If you have multiple Python versions, use `python3` instead of `python`
+- **Xcode Command Line Tools**: Install if you encounter compilation errors: `xcode-select --install`
+- **Homebrew Issues**: Update Homebrew before installing packages: `brew update`
+- **Permission Errors**: If npm install fails, try: `sudo chown -R $(whoami) ~/.npm`
+- **Ollama**: For Apple Silicon Macs, ensure you're using the native version. Check with `ollama --version`
+
+### Development Tips
+- **Backend**: Use `uvicorn app.main:app --reload --log-level info` for more detailed logging
+- **Frontend**: Use `npm run dev -- --host 0.0.0.0` to allow external access
+- **Database**: Check Supabase logs in the dashboard for database-related errors
+- **Environment**: Always activate the virtual environment before running backend commands
+- **Ollama**: Monitor AI agent performance with `ollama logs` and check model status with `ollama ps`
 
 ## 🗺️ Roadmap
 

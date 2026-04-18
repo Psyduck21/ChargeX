@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 import httpx
 from ..database import get_supabase_client, get_supabase_service_role_client
+from .statistics import list_stations
 from ..crud.profiles import get_user_profile
 from fastapi import HTTPException
 
@@ -243,11 +244,11 @@ async def delete_station_manager(manager_id: UUID) -> bool:
 async def get_manager_stations(manager_id: str) -> List[Dict[str, Any]]:
     """Get all stations managed by a specific station manager"""
     try:
-        supabase = await get_supabase_client()
-        response = supabase.table("stations").select("*").eq("station_manager", manager_id).execute()
-        print(f"Fetched stations for manager {manager_id}: {response.data}*10")
-        return response.data or []
-    except httpx.HTTPError as e:
+        stations = await list_stations()
+        manager_stations = [station for station in stations if str(station.get("station_manager")) == str(manager_id)]
+        print(f"Fetched stations for manager {manager_id}: {manager_stations}")
+        return manager_stations
+    except Exception as e:
         print(f"Error fetching stations for manager {manager_id}: {e}")
         return []
 

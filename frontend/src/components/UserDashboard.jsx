@@ -1,36 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Zap, MapPin, Search, Filter, Navigation, Star, Clock, Battery, DollarSign, Calendar, ChevronRight, Heart, User, Bell, Settings, LogOut, Menu, X, Bookmark, History, CreditCard, Phone, Mail, AlertCircle, Car, Plus, Edit2, Trash2, BarChart3, TrendingUp, Leaf, ChevronDown, Sun, Moon, Monitor } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Zap, MapPin, Navigation, Clock, Calendar, User, LogOut, X, Car, ChevronRight, ChevronDown, MessageSquare } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import ProfileModal from './admindashboard/ProfileModal';
+import UserManagementSuite from './user/UserManagementSuite';
 import apiService from '../services/api';
 // import StationCard from './user/StationCard';
 import BookingModal from './user/BookingModal';
 import { useToast } from './ui/Toast';
 import StationsTab from './user/StationsTab';
-import VehiclesTab from './user/VehiclesTab';
-import BookingsTab from './user/BookingsTab';
-import HistoryTab from './user/HistoryTab';
+import AgentTab from './user/AgentTab';
 
 function ChargeXUserDashboard({ onLogout }) {
   const { theme, toggleTheme, themeType, isSystem } = useTheme();
   const isDark = theme === 'dark';
 
-  const [activeTab, setActiveTab] = useState('stations');
+  const [activeView, setActiveView] = useState('agent'); // agent, stations
+  const [showUserSuite, setShowUserSuite] = useState(false);
+  const [profileInitialTab, setProfileInitialTab] = useState('profile');
+
   const [stations, setStations] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [filteredStations, setFilteredStations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStation, setSelectedStation] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
   const [selectedStationForMap, setSelectedStationForMap] = useState(null);
   const [sortBy, setSortBy] = useState('distance');
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [showAddStationModal, setShowAddStationModal] = useState(false);
 
   const [bookingData, setBookingData] = useState({
     stationId: null,
@@ -114,90 +112,103 @@ function ChargeXUserDashboard({ onLogout }) {
     loadUserStats();
   }, []);
 
-  // Update booking names when stations/vehicles data is loaded
-  useEffect(() => {
-    if (bookings.length > 0 && stations.length > 0 && vehicles.length > 0) {
-      const updatedBookings = bookings.map(b => {
-        // Find station name from loaded stations data
-        let stationName = b.station_name || 'Unknown Station';
-        let stationAddress = b.station_address || 'Address not available';
+  // Transform bookings data when stations/vehicles data changes
+  // This creates a new array instead of modifying existing state
+  const transformedBookings = React.useMemo(() => {
+    if (bookings.length === 0) return [];
 
-        if (b.station_id) {
-          const station = stations.find(s => {
-            const match = String(s.id) === String(b.station_id);
-            return match;
-          });
-          if (station) {
-            stationName = station.name;
-            stationAddress = station.address;
-          }
+    return bookings.map(b => {
+      // Find station name from loaded stations data
+      let stationName = b.station_name || 'Unknown Station';
+      let stationAddress = b.station_address || 'Address not available';
+
+      if (b.station_id) {
+        const station = stations.find(s => {
+          const match = String(s.id) === String(b.station_id);
+          return match;
+        });
+        if (station) {
+          stationName = station.name;
+          stationAddress = station.address;
         }
+      }
 
-        // Find vehicle name from loaded vehicles data
-        let vehicleName = b.vehicle_name || 'Unknown Vehicle';
+      // Find vehicle name from loaded vehicles data
+      let vehicleName = b.vehicle_name || 'Unknown Vehicle';
 
-        if (b.vehicle_id) {
-          const vehicle = vehicles.find(v => {
-            const match = String(v.id) === String(b.vehicle_id);
-            return match;
-          });
-          if (vehicle) {
-            vehicleName = `${vehicle.brand} ${vehicle.model}`;
-          }
+      if (b.vehicle_id) {
+        const vehicle = vehicles.find(v => {
+          const match = String(v.id) === String(b.vehicle_id);
+          return match;
+        });
+        if (vehicle) {
+          vehicleName = `${vehicle.brand} ${vehicle.model}`;
         }
+      }
 
-        // Format timestamps properly
-        const startTime = new Date(b.start_time);
-        const endTime = b.end_time ? new Date(b.end_time) : null;
+      // Format timestamps properly with error handling
+      let startTime, endTime;
+      try {
+        // Ensure string ends with Z if it looks like a naive timestamp but we want it treated as UTC
+        // or just rely on the browser's parsing if it's already aware.
+        const startStr = b.start_time;
+        const endStr = b.end_time;
+        
+        startTime = new Date(startStr);
+        endTime = endStr ? new Date(endStr) : null;
+      } catch (e) {
+        console.warn('Invalid date format in booking:', b);
+        startTime = new Date();
+        endTime = null;
+      }
 
-        return {
-          ...b,
-          station_name: stationName,
-          station_address: stationAddress,
-          vehicle_name: vehicleName,
-          booking_date: startTime.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-          }),
-          time_slot: `${startTime.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          })}${endTime ? ` - ${endTime.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          })}` : ''}`,
-          formatted_start_time: startTime.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          }),
-          formatted_end_time: endTime ? endTime.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          }) : null
-        };
-      });
+      // Generate a consistent time_slot if it's not provided by backend
+      const timeSlotStr = b.time_slot || `${startTime.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      })}${endTime ? ` - ${endTime.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      })}` : ''}`;
 
-      setBookings(updatedBookings);
-    }
-  }, [stations, vehicles]);
+      return {
+        ...b,
+        station_name: stationName,
+        station_address: stationAddress,
+        vehicle_name: vehicleName,
+        booking_date: startTime.toLocaleDateString([], {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        }),
+        time_slot: timeSlotStr,
+        formatted_start_time: startTime.toLocaleString([], {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        }),
+        formatted_end_time: endTime ? endTime.toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        }) : null
+      };
+    });
+  }, [bookings, stations, vehicles]);
 
-  // Update distances when both stations and user location are available
-  useEffect(() => {
-    if (stations.length > 0 && userLocation && !stations.some(s => s.distance > 0)) {
-      updateStationDistances(userLocation);
-    }
-  }, [stations, userLocation]);
+  // Open the full-screen profile suite pointing at a specific tab
+  const openProfileSuite = (tab = 'profile') => {
+    setProfileInitialTab(tab);
+    setShowUserSuite(true);
+  };
 
   // Request location permission and get user location
   const requestLocationPermission = () => {
@@ -639,146 +650,155 @@ function ChargeXUserDashboard({ onLogout }) {
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
-      {/* Sidebar */}
-      <aside className={`fixed left-0 top-0 h-screen w-64 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r p-6 z-40 transform transition-transform duration-300 ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } lg:translate-x-0`}>
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
-            <Zap className="w-6 h-6 text-white" />
+      {/* Header */}
+      <header className={`fixed top-0 left-0 right-0 z-50 ${isDark ? 'bg-gray-900/95 border-gray-800' : 'bg-white/95 border-gray-200'} border-b px-6 py-3 backdrop-blur-sm`}>
+        <div className="flex items-center justify-between">
+          {/* Brand */}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
+              <Zap className="w-5 h-5 text-white" />
+            </div>
+            <span className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>ChargeX</span>
           </div>
-          <span className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>ChargeX</span>
-        </div>
 
-        <nav className="space-y-2">
-          <button
-            onClick={() => setActiveTab('stations')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
-              activeTab === 'stations' ? 'bg-emerald-600 text-white' : `${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`
-            }`}
-          >
-            <MapPin className="w-5 h-5" />
-            Find Stations
-          </button>
-          <button
-            onClick={() => setActiveTab('vehicles')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
-              activeTab === 'vehicles' ? 'bg-emerald-600 text-white' : `${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`
-            }`}
-          >
-            <Car className="w-5 h-5" />
-            My Vehicles
-          </button>
-          <button
-            onClick={() => setActiveTab('bookings')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
-              activeTab === 'bookings' ? 'bg-emerald-600 text-white' : `${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`
-            }`}
-          >
-            <Calendar className="w-5 h-5" />
-            My Bookings
-          </button>
-          {/* <button
-            onClick={() => setActiveTab('history')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
-              activeTab === 'history' ? 'bg-emerald-600 text-white' : `${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`
-            }`}
-          >
-            <History className="w-5 h-5" />
-            History
-          </button> */}
-          <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
-            <CreditCard className="w-5 h-5" />
-            Payments
-          </button>
-        </nav>
+          {/* Chat / Stations Pill Tab Bar */}
+          <div className={`flex items-center gap-1 p-1 rounded-2xl ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+            <button
+              id="tab-chat"
+              onClick={() => setActiveView('agent')}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                activeView === 'agent'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Chat</span>
+            </button>
+            <button
+              id="tab-stations"
+              onClick={() => setActiveView('stations')}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                activeView === 'stations'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <MapPin className="w-4 h-4" />
+              <span>Stations</span>
+            </button>
+          </div>
 
-        <div className="absolute bottom-6 left-6 right-6 space-y-3">
-          <button
-            onClick={() => setShowLogoutModal(true)}
-            className={`w-full flex items-center gap-3 p-4 ${isDark ? 'bg-red-900/20 text-red-400 hover:bg-red-900/30' : 'bg-red-50 text-red-700 hover:bg-red-100'} rounded-xl transition-colors`}
-          >
-            <LogOut className="w-5 h-5" />
-            <span className="font-medium">Logout</span>
-          </button>
-          <button
-            onClick={() => setShowProfile(true)}
-            className={`w-full flex items-center gap-3 p-4 ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-xl transition-colors`}
-          >
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold">
-              {userProfile.name[0]}
+          {/* User Avatar → opens full-screen profile suite */}
+          <div className="relative group">
+            <button
+              id="avatar-btn"
+              onClick={() => openProfileSuite('profile')}
+              className={`flex items-center gap-2.5 p-1.5 pr-3 rounded-2xl transition-all duration-200 ${
+                isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+              }`}
+            >
+              <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-sm ring-2 ring-emerald-500/30">
+                {(userProfile.name?.[0] || 'U').toUpperCase()}
+              </div>
+              <div className="hidden sm:block text-left">
+                <p className={`text-sm font-semibold leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  {userProfile.name?.split(' ')[0] || 'User'}
+                </p>
+                <p className={`text-xs leading-tight ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>My Account</p>
+              </div>
+              <ChevronDown className={`w-3.5 h-3.5 ${isDark ? 'text-gray-400' : 'text-gray-400'} hidden sm:block`} />
+            </button>
+
+            {/* Hover mini-menu */}
+            <div className={`absolute right-0 top-full mt-2 w-52 rounded-2xl shadow-xl border py-2 z-50
+              invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0
+              transition-all duration-200
+              ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
+              {[
+                { label: 'My Profile',  icon: User,     tab: 'profile'  },
+                { label: 'My Vehicles', icon: Car,      tab: 'vehicles' },
+                { label: 'My Bookings', icon: Calendar, tab: 'bookings' },
+              ].map(({ label, icon: Icon, tab }) => (
+                <button
+                  key={tab}
+                  onClick={() => openProfileSuite(tab)}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-sm
+                    ${isDark ? 'text-gray-300 hover:bg-gray-700/60' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </button>
+              ))}
+              <div className={`border-t mx-2 my-1 ${isDark ? 'border-gray-700' : 'border-gray-100'}`} />
+              <button
+                onClick={() => setShowLogoutModal(true)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-red-500 hover:bg-red-50/60 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
             </div>
-            <div className="text-left flex-1">
-              <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{userProfile.name.split(' ')[0]}</p>
-              <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>View Profile</p>
-            </div>
-          </button>
+          </div>
         </div>
-      </aside>
+      </header>
 
-      {/* Main Content */}
-      <main className="lg:ml-64 p-4 md:p-8">
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className={`lg:hidden fixed top-4 left-4 z-50 p-2 ${isDark ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg`}
-        >
-          {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+      {/* Main Content Area */}
+      <div className="pt-[4.25rem] min-h-screen">
+        <main className="h-[calc(100vh-4.25rem)] overflow-y-auto">
 
-        {/* Stations Tab */}
-        {activeTab === 'stations' && (
-          <StationsTab
-            stations={stations}
-            filteredStations={filteredStations}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            filters={filters}
-            setFilters={setFilters}
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            userProfile={userProfile}
-            vehicles={vehicles}
-            onBookStation={(s) => { setSelectedStation(s); setShowBookingModal(true); }}
-            onGetDirections={getDirections}
-            locationPermission={locationPermission}
-            requestLocationPermission={requestLocationPermission}
-            darkMode={isDark}
-          />
-        )}
+          {activeView === 'agent' && (
+            <AgentTab
+              userProfile={userProfile}
+              userLocation={userLocation}
+              stations={stations}
+              vehicles={vehicles}
+              darkMode={isDark}
+              onBookStation={(s) => { setSelectedStation(s); setShowBookingModal(true); }}
+            />
+          )}
 
-        {/* Vehicles Tab */}
-        {activeTab === 'vehicles' && (
-          <VehiclesTab
-            vehicles={vehicles}
-            setVehicles={setVehicles}
-            toast={toast}
-            darkMode={isDark}
-          />
-        )}
+          {activeView === 'stations' && (
+            <div className="p-6">
+              <StationsTab
+                stations={stations}
+                filteredStations={filteredStations}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                filters={filters}
+                setFilters={setFilters}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                userProfile={userProfile}
+                vehicles={vehicles}
+                onBookStation={(s) => { setSelectedStation(s); setShowBookingModal(true); }}
+                onGetDirections={getDirections}
+                locationPermission={locationPermission}
+                requestLocationPermission={requestLocationPermission}
+                darkMode={isDark}
+              />
+            </div>
+          )}
 
-        {/* Bookings Tab */}
-        {activeTab === 'bookings' && (
-          <BookingsTab
-            bookings={bookings}
-            userSessions={userSessions}
-            stations={stations}
-            vehicles={vehicles}
-            setActiveTab={setActiveTab}
-            onBookingUpdate={loadUserData}
-            darkMode={isDark}
-          />
-        )}
+        </main>
+      </div>
 
-        {/* History Tab */}
-        {/* {activeTab === 'history' && (
-          <HistoryTab
-            bookingHistory={bookingHistory}
-            setActiveTab={setActiveTab}
-            darkMode={isDark}
-          />
-        )} */}
-      </main>
+      {/* Full-Screen Profile Suite (avatar-triggered) */}
+      <UserManagementSuite
+        isOpen={showUserSuite}
+        onClose={() => setShowUserSuite(false)}
+        initialTab={profileInitialTab}
+        userProfile={userProfile}
+        setUserProfile={setUserProfile}
+        vehicles={vehicles}
+        setVehicles={setVehicles}
+        bookings={transformedBookings}
+        userSessions={userSessions}
+        stations={stations}
+        darkMode={isDark}
+        loadUserData={loadUserData}
+        onLogout={() => { setShowUserSuite(false); setShowLogoutModal(true); }}
+      />
 
       <BookingModal
         selectedStation={selectedStation}
@@ -792,14 +812,8 @@ function ChargeXUserDashboard({ onLogout }) {
         slotFetchError={slotFetchError}
       />
 
-  {/* toasts provided by ToastProvider at App root */}
+      {/* Modals */}
       <MapModal />
-      <ProfileModal
-        showProfileModal={showProfile}
-        adminProfile={userProfile}
-        setShowProfileModal={setShowProfile}
-        setAdminProfile={setUserProfile}
-      />
 
       {/* Logout Modal */}
       {showLogoutModal && (
@@ -837,14 +851,6 @@ function ChargeXUserDashboard({ onLogout }) {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Overlay for mobile sidebar */}
-      {sidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-30"
-          onClick={() => setSidebarOpen(false)}
-        ></div>
       )}
     </div>
   );

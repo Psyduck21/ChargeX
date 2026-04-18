@@ -38,7 +38,7 @@ export default function BookingsTab({
   const totalPages = Math.max(1, Math.ceil(filteredBookings.length / itemsPerPage));
 
   const statusStats = useMemo(() => {
-    const s = { pending: 0, accepted: 0, active: 0, completed: 0, rejected: 0, cancelled: 0 };
+    const s = { pending: 0, confirmed: 0, active: 0, completed: 0, cancelled: 0 };
     (bookings || []).forEach(b => {
       const st = (b.status || '').toLowerCase();
       if (st in s) s[st]++;

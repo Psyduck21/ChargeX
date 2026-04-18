@@ -189,7 +189,7 @@ export default function StationsAnalyticsTab({
             <div>
               <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Total Slots</p>
               <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                {selectedStation.capacity || 0}
+                {selectedStation.total_slots || 0}
               </p>
             </div>
           </div>

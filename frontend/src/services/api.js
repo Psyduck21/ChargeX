@@ -491,6 +491,20 @@ class ApiService {
   async getNearbyStations(stationId, limit = 5, sortBy = "distance") {
     return this.apiCall(`/stations/${stationId}/nearby?limit=${limit}&sort_by=${sortBy}`, { method: 'GET' });
   }
+
+  // Agent APIs
+  async chatWithAgent(message, chatHistory, clientVehicles = [], contextStations = []) {
+    return this.apiCall('/agent/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: message,
+        chat_history: chatHistory,
+        client_vehicles: clientVehicles,
+        context_stations: contextStations,
+        timezone_offset: new Date().getTimezoneOffset()
+      })
+    });
+  }
 }
 
 // Create and export a singleton instance

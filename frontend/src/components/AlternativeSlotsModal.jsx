@@ -20,8 +20,16 @@ export default function AlternativeSlotsModal({
 
   useEffect(() => {
     if (stations && stations.length > 0) {
-      // Sort by power (descending) if battery is low, otherwise by distance (ascending)
+      // Sort: time suggestions first (by time ascending), then other stations by power/distance
       const sorted = [...stations].sort((a, b) => {
+        const aIsTime = a.is_time_suggestion;
+        const bIsTime = b.is_time_suggestion;
+        if (aIsTime && !bIsTime) return -1;
+        if (!aIsTime && bIsTime) return 1;
+        if (aIsTime && bIsTime) {
+          return (a.suggested_time || "99:99").localeCompare(b.suggested_time || "99:99");
+        }
+        // both not time suggestions
         if (lowBattery) {
           // Sort by max power descending (fastest chargers first)
           const powerA = a.max_power_kw || 0;
@@ -159,6 +167,12 @@ export default function AlternativeSlotsModal({
                       <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                         {station.name || 'Charging Station'}
                       </h3>
+                      {station.is_time_suggestion && station.suggested_time && (
+                        <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <Clock className="w-4 h-4 inline mr-1" />
+                          Available at {station.suggested_time}
+                        </p>
+                      )}
                       <p className={`text-sm flex items-center gap-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         <MapPin className="w-4 h-4" />
                         {station.city}, {station.country}

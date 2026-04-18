@@ -35,7 +35,8 @@ from .routers import (
     feedback,
     activity,
     admin,
-    analytics
+    analytics,
+    agent
 )
 from .database import init_db
 from .crud.bookings import complete_expired_bookings, activate_started_bookings
@@ -148,6 +149,7 @@ app.include_router(feedback.router)
 app.include_router(activity.router)
 app.include_router(admin.router)
 app.include_router(analytics.router)
+app.include_router(agent.router)
 
 async def activate_started_bookings_task():
     """Background task to activate started bookings every minute."""

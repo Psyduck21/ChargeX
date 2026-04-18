@@ -60,11 +60,100 @@ async def delete_station(station_id: UUID) -> Optional[Dict[str, Any]]:
     except Exception as e:
         return False
 
+async def find_stations_by_coordinates(target_lat: float, target_lon: float, exclude_station_id: Optional[str] = None, limit: int = 3, sort_by: str = "distance") -> List[Dict[str, Any]]:
+    """Generic utility to find stations near coordinates. Can optionally exclude a specific station ID."""
+    try:
+        supabase = await get_supabase_client()
+
+        # Fetch full station details with all relevant fields
+        active_sessions_response = supabase.table("charging_sessions").select("slot_id").is_("end_time", None).execute()
+        occupied_slot_ids = {
+            str(session.get("slot_id"))
+            for session in (active_sessions_response.data or [])
+            if session.get("slot_id")
+        }
+
+        # Query all slots and optionally filter out the excluded station ID
+        slots_query = supabase.table("charging_slots").select("id, station_id, is_available, status, max_power_kw")
+        if exclude_station_id:
+            slots_query = slots_query.neq("station_id", exclude_station_id)
+        slots_response = slots_query.execute()
+        slots = slots_response.data or []
+
+        station_available_counts = {}
+        for slot in slots:
+            sid = slot.get("station_id")
+            if not sid:
+                continue
+            slot_id = str(slot.get("id"))
+            is_available = slot.get("is_available", False)
+            status = (slot.get("status") or "").lower()
+            if not is_available:
+                continue
+            if status in ["maintenance", "disabled", "out_of_order"]:
+                continue
+            if slot_id in occupied_slot_ids:
+                continue
+
+            sid_str = str(sid)
+            station_available_counts[sid_str] = station_available_counts.get(sid_str, 0) + 1
+
+        # Query all stations and optionally filter out the excluded station ID
+        stations_query = supabase.table("stations").select(
+            "id, name, address, city, country, zip_code, latitude, longitude, total_slots, "
+            "price_per_hour"
+        )
+        if exclude_station_id:
+            stations_query = stations_query.neq("id", exclude_station_id)
+        other_resp = stations_query.execute()
+        others = other_resp.data or []
+        
+        def haversine(lat1, lon1, lat2, lon2):
+            R = 6371.0
+            dlat = math.radians(lat2 - lat1)
+            dlon = math.radians(lon2 - lon1)
+            a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            return R * c
+
+        valid_stations = []
+        for st in others:
+            db_capacity = st.get("total_slots")
+            if db_capacity is not None:
+                st["total_slots"] = db_capacity
+
+            station_id_str = str(st.get("id"))
+            available_count = station_available_counts.get(station_id_str, 0)
+            if available_count <= 0:
+                continue
+            if st.get("latitude") is None or st.get("longitude") is None:
+                continue
+            dist = haversine(target_lat, target_lon, float(st["latitude"]), float(st["longitude"]))
+            st["distance_km"] = round(dist, 2)
+            st["available_slots"] = available_count
+            
+            # max_power_kw is not in the stations table (it's slot-level data)
+            # Set a safe default; sort_by='power' will treat all equally here
+            st["max_power_kw"] = 0
+            
+            valid_stations.append(st)
+        
+        # Sort based on the sort_by parameter    
+        if sort_by == "power":
+            valid_stations.sort(key=lambda x: x.get("max_power_kw", 0), reverse=True)
+        else:
+            valid_stations.sort(key=lambda x: x["distance_km"])
+        
+        return valid_stations[:limit]
+
+    except Exception as e:
+        print(f"❌ Error finding stations by coordinates: {e}")
+        return []
+
 async def find_nearest_station(station_id: str) -> Optional[Dict[str, Any]]:
     """Find the nearest station with available slots relative to the given station ID."""
     try:
         supabase = await get_supabase_client()
-        # First, grab the target station coordinates
         target_resp = supabase.table("stations").select("latitude, longitude").eq("id", station_id).single().execute()
         target = target_resp.data
         if not target or target.get("latitude") is None or target.get("longitude") is None:
@@ -72,34 +161,14 @@ async def find_nearest_station(station_id: str) -> Optional[Dict[str, Any]]:
         
         target_lat = float(target["latitude"])
         target_lon = float(target["longitude"])
-
-        # Fetch all other stations that are active and have available slots
-        other_resp = supabase.table("stations").select("id, name, address, latitude, longitude, available_slots").gt("available_slots", 0).neq("id", station_id).execute()
-        others = other_resp.data or []
         
-        nearest = None
-        min_dist = float('inf')
-
-        # Haversine distance
-        def haversine(lat1, lon1, lat2, lon2):
-            R = 6371.0  # Earth radius in kilometers
-            dlat = math.radians(lat2 - lat1)
-            dlon = math.radians(lon2 - lon1)
-            a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
-            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-            return R * c
-
-        for st in others:
-            if st.get("latitude") is None or st.get("longitude") is None:
-                continue
-            dist = haversine(target_lat, target_lon, float(st["latitude"]), float(st["longitude"]))
-            if dist < min_dist:
-                min_dist = dist
-                nearest = st
-                # attach distance property to hint to user
-                nearest["distance_km"] = round(dist, 2)
-                
-        return nearest
+        nearest_list = await find_stations_by_coordinates(
+            target_lat=target_lat, 
+            target_lon=target_lon, 
+            exclude_station_id=station_id, 
+            limit=1
+        )
+        return nearest_list[0] if nearest_list else None
         
     except Exception as e:
         print(f"❌ Error finding nearest station: {e}")
@@ -117,48 +186,13 @@ async def find_nearby_stations(station_id: str, limit: int = 3, sort_by: str = "
         target_lat = float(target["latitude"])
         target_lon = float(target["longitude"])
 
-        # Fetch full station details with all relevant fields
-        other_resp = supabase.table("stations").select(
-            "id, name, address, city, country, zip_code, latitude, longitude, available_slots, total_slots, "
-            "price_per_hour, rating, reviews, connector_types"
-        ).gt("available_slots", 0).neq("id", station_id).execute()
-        others = other_resp.data or []
-        
-        def haversine(lat1, lon1, lat2, lon2):
-            R = 6371.0
-            dlat = math.radians(lat2 - lat1)
-            dlon = math.radians(lon2 - lon1)
-            a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
-            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-            return R * c
-
-        valid_stations = []
-        for st in others:
-            if st.get("latitude") is None or st.get("longitude") is None:
-                continue
-            dist = haversine(target_lat, target_lon, float(st["latitude"]), float(st["longitude"]))
-            st["distance_km"] = round(dist, 2)
-            
-            # Calculate max power from connector_types if available
-            max_power = 0
-            if st.get("connector_types") and isinstance(st["connector_types"], list):
-                for connector in st["connector_types"]:
-                    if isinstance(connector, dict) and connector.get("max_power_kw"):
-                        max_power = max(max_power, connector.get("max_power_kw", 0))
-            st["max_power_kw"] = max_power
-            
-            valid_stations.append(st)
-        
-        # Sort based on the sort_by parameter    
-        if sort_by == "power":
-            # Sort by max power descending (fastest chargers first)
-            valid_stations.sort(key=lambda x: x.get("max_power_kw", 0), reverse=True)
-        else:
-            # Default: sort by distance ascending (nearest first)
-            valid_stations.sort(key=lambda x: x["distance_km"])
-        
-        return valid_stations[:limit]
-
+        return await find_stations_by_coordinates(
+            target_lat=target_lat,
+            target_lon=target_lon,
+            exclude_station_id=station_id,
+            limit=limit,
+            sort_by=sort_by
+        )
     except Exception as e:
         print(f"❌ Error finding nearby stations: {e}")
         return []

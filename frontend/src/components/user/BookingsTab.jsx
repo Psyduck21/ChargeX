@@ -94,6 +94,19 @@ function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [],
     if (!processed.vehicle_name) processed.vehicle_name = 'Unknown Vehicle';
     if (!processed.connector_type) processed.connector_type = 'Unknown';
 
+    // Format time_slot consistently
+    const start = new Date(processed.start_time);
+    const end = processed.end_time ? new Date(processed.end_time) : null;
+    processed.time_slot = `${start.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })}${end ? ` - ${end.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })}` : ''}`;
+
     return processed;
   });
 
@@ -161,9 +174,7 @@ function BookingsTab({ bookings, setActiveTab, userSessions = [], stations = [],
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
-                        {item.type === 'session'
-                          ? `${new Date(item.start_time).toLocaleTimeString()} - ${new Date(item.end_time).toLocaleTimeString()}`
-                          : item.time_slot}
+                        {item.time_slot}
                       </span>
                       <span className="flex items-center gap-1">
                         <Zap className="w-4 h-4" />

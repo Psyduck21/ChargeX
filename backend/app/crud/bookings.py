@@ -35,8 +35,14 @@ async def request_slot_booking(booking_data: BookingCreate) -> Optional[BookingO
         raise ValueError(f"Unsupported datetime value: {v}")
 
     # Normalize start/end
-    start_dt = _parse_dt(booking_dict.get('start_time'))
-    end_dt = _parse_dt(booking_dict.get('end_time'))
+    start_time_val = booking_dict.get('start_time')
+    end_time_val = booking_dict.get('end_time')
+
+    # If they are already strings from Supabase, ensure they have Z or offset
+    # If they are datetimes, Pydantic will handle them.
+    # But for overlap validation, we need them as objects.
+    start_dt = _parse_dt(start_time_val)
+    end_dt = _parse_dt(end_time_val)
     if not start_dt or not end_dt:
         raise ValueError("start_time and end_time are required and must be valid datetimes")
     if end_dt <= start_dt:
@@ -66,33 +72,78 @@ async def request_slot_booking(booking_data: BookingCreate) -> Optional[BookingO
     # If slot specified, ensure no overlapping blocking bookings exist
     if slot_id:
         try:
+            # We don't block pending because we are removing it, but keep it for legacy compat
             blocking_statuses = ["confirmed", "active", "pending"]
             resp = supabase.table("bookings").select("*").eq("slot_id", str(slot_id)).in_("status", blocking_statuses).execute()
             existing = resp.data or []
+            overlaps = []
             for b in existing:
                 b_start = _parse_dt(b.get('start_time'))
                 b_end = _parse_dt(b.get('end_time'))
                 if b_start and b_end:
-                    # overlap if requested_start < existing_end and existing_start < requested_end
                     if start_dt < b_end and b_start < end_dt:
-                        raise ValueError(f"Slot {slot_id} unavailable between {b_start.isoformat()} and {b_end.isoformat()} due to booking {b.get('id')}")
+                        overlaps.append(b)
+            
+            if overlaps:
+                # Check for emergency override (battery < 15%)
+                battery_level = booking_dict.get('current_battery_level')
+                new_battery = float(battery_level) if battery_level is not None else 100.0
+                
+                can_override = new_battery < 15.0
+                if can_override:
+                    # check if any overlapping booking also has < 15 or is active
+                    for b in overlaps:
+                        if b.get("status") == "active":
+                            raise ValueError(f"Cannot override: slot {slot_id} is currently actively charging another vehicle.")
+                        
+                        b_batt = b.get('current_battery_level')
+                        b_batt = float(b_batt) if b_batt is not None else 100.0
+                        if b_batt < 15.0:
+                            raise ValueError(f"Slot {slot_id} unavailable: another critical emergency booking (<15%) already exists.")
+                    
+                    # If we reached here, the new booking OVERRIDES all overlapping ones.
+                    # We cancel them and automatically book an alternate for them.
+                    from .station import find_nearest_station
+                    for b in overlaps:
+                        # Cancel the displaced booking
+                        upd = {"status": "cancelled"}
+                        supabase.table("bookings").update(upd).eq("id", str(b.get("id"))).execute()
+                        
+                        # Find an alternate available station & slot
+                        nearest = await find_nearest_station(str(b.get("station_id")))
+                        if nearest:
+                            nearest_station_id = nearest.get("id")
+                            # Find an available slot there
+                            slots_resp = supabase.table("charging_slots").select("id").eq("station_id", nearest_station_id).eq("is_available", True).execute()
+                            if slots_resp.data and len(slots_resp.data) > 0:
+                                alt_slot_id = slots_resp.data[0]["id"]
+                                
+                                # Auto book the alternative slot for the displaced user
+                                alt_booking = dict(b)
+                                alt_booking.pop("id", None)
+                                alt_booking.pop("created_at", None)
+                                alt_booking.pop("updated_at", None)
+                                alt_booking["station_id"] = nearest_station_id
+                                alt_booking["slot_id"] = alt_slot_id
+                                alt_booking["status"] = "confirmed" 
+                                
+                                supabase.table("bookings").insert(alt_booking).execute()
+                else:
+                    raise ValueError(f"Slot {slot_id} unavailable between {start_dt.isoformat()} and {end_dt.isoformat()} due to existing booking.")
         except httpx.HTTPError as e:
             print(f"Error checking existing bookings for slot {slot_id}: {e}")
-            # re-raise to be handled by router
             raise
 
-    # No conflicts — convert datetimes to ISO strings and insert as pending
+    # No conflicts or we successfully pre-empted others — insert as confirmed!
     try:
         if isinstance(start_dt, datetime):
             booking_dict['start_time'] = start_dt.isoformat()
         if isinstance(end_dt, datetime):
             booking_dict['end_time'] = end_dt.isoformat()
 
-        battery_level = booking_dict.get('current_battery_level')
-        if battery_level is not None and float(battery_level) < 15.0:
-            booking_dict['status'] = 'confirmed'
-        else:
-            booking_dict['status'] = 'pending'
+        # ALL bookings go straight to confirmed now (no manager needed)
+        booking_dict['status'] = 'confirmed'
+        
         response = supabase.table("bookings").insert(booking_dict).execute()
         created = (response.data or [None])[0]
         if not created:

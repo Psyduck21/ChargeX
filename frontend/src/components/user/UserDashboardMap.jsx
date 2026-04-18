@@ -3,8 +3,11 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { MapPin, Navigation, X, Zap, Star, DollarSign, Users, Phone, Clock } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import 'leaflet-routing-machine';
+// We'll hide the native routing instructions panel since it can be bulky
+import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 
-// Custom CSS to override leaflet z-index values
+// Component to handle map centering when user location changes
 const mapStyles = `
   .leaflet-container .leaflet-popup-pane { z-index: 10 !important; }
   .leaflet-container .leaflet-tooltip-pane { z-index: 15 !important; }
@@ -36,6 +39,48 @@ function MapCenterHandler({ center, zoom }) {
   return null;
 }
 
+// Map Routing Controller Hook
+function RoutingControl({ source, destination, darkMode }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!source || !destination || !map) return;
+    
+    // Clear old routing controls if they exist
+    if (map.routingControl) {
+      map.removeControl(map.routingControl);
+    }
+
+    const routingControl = L.Routing.control({
+      waypoints: [
+        L.latLng(source.lat, source.lng),
+        L.latLng(destination.lat || destination.latitude, destination.lng || destination.longitude)
+      ],
+      routeWhileDragging: false,
+      addWaypoints: false,
+      fitSelectedRoutes: true,
+      lineOptions: {
+        styles: [{ color: '#10b981', weight: 6, opacity: 0.8 }]
+      },
+      show: false, // Don't show the clunky itinerary table
+      createMarker: () => null // Hide default ugly markers
+    }).addTo(map);
+    
+    map.routingControl = routingControl;
+
+    return () => {
+      try {
+        if (map.routingControl) {
+           map.removeControl(map.routingControl);
+           map.routingControl = null;
+        }
+      } catch (e) {}
+    };
+  }, [source, destination, map]);
+
+  return null;
+}
+
 /**
  * UserDashboardMap Component
  * Displays charging stations on an interactive Leaflet map
@@ -53,6 +98,7 @@ export default function UserDashboardMap({
   onCloseBookingModal = null
 }) {
   const [selectedStation, setSelectedStation] = useState(null);
+  const [routeDestination, setRouteDestination] = useState(null);
   const [mapCenter, setMapCenter] = useState([40.7128, -74.0060]); // Default to NYC
   const [mapZoom, setMapZoom] = useState(13);
 
@@ -104,13 +150,15 @@ export default function UserDashboardMap({
   };
 
   const handleGetDirections = (station) => {
-    if (onGetDirections) {
-      onGetDirections(station);
-    } else if (userLocation) {
-      const origin = `${userLocation.lat},${userLocation.lng}`;
-      const destination = `${station.latitude || station.lat},${station.longitude || station.lng}`;
-      const mapsUrl = `https://www.google.com/maps/dir/${origin}/${destination}`;
-      window.open(mapsUrl, '_blank');
+    if (userLocation && userLocation.lat && userLocation.lng) {
+      // Toggle Route off if clicked again on same station, else show
+      if (routeDestination && routeDestination.id === station.id) {
+        setRouteDestination(null);
+      } else {
+        setRouteDestination(station);
+      }
+    } else {
+      alert("Please enable location first to get directions.");
     }
   };
 
@@ -196,11 +244,20 @@ export default function UserDashboardMap({
           >
             <MapCenterHandler center={mapCenter} zoom={mapZoom} />
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
               maxZoom={20}
               subdomains="abcd"
             />
+            
+            {/* Native routing path */}
+            {userLocation && routeDestination && (
+               <RoutingControl 
+                 source={userLocation} 
+                 destination={{lat: routeDestination.latitude, lng: routeDestination.longitude}} 
+                 darkMode={darkMode} 
+               />
+            )}
 
             {/* User Location Marker */}
             {userLocation && userLocation.lat && userLocation.lng && (
@@ -322,7 +379,7 @@ export default function UserDashboardMap({
                           className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
                         >
                           <Navigation className="w-4 h-4" />
-                          Directions
+                          {routeDestination?.id === normalized.id ? 'Clear Route' : 'Directions'}
                         </button>
                         <button
                           onClick={() => handleOpenBookingModal(normalized)}
@@ -448,7 +505,7 @@ export default function UserDashboardMap({
                     onClick={() => handleGetDirections(normalized)}
                     className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-xl hover:bg-gray-200 transition-colors"
                   >
-                    Directions
+                    {routeDestination?.id === normalized.id ? 'Clear Route' : 'Directions'}
                   </button>
                 </div>
               </div>

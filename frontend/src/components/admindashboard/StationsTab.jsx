@@ -106,11 +106,11 @@ export default function StationsTab({
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-xs text-gray-500 mb-1">Capacity</p>
-                <p className="text-xl font-bold text-gray-900">{station.capacity || 'N/A'}</p>
+                <p className="text-xl font-bold text-gray-900">{station.capacity || 'N/A'} KWH</p>
               </div>
               <div className="bg-emerald-50 rounded-lg p-3">
                 <p className="text-xs text-emerald-700 mb-1">Available</p>
-                <p className="text-xl font-bold text-emerald-600">{station.available_slots}</p>
+                <p className="text-xl font-bold text-emerald-600">{station.total_slots}</p>
               </div>
             </div>
 
