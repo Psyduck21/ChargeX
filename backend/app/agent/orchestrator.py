@@ -131,10 +131,18 @@ def _extract_booking_intent(text: str) -> Dict[str, Optional[str]]:
         candidate = specific_pattern.group(1).strip()
         # Strip trailing "at", "on", "for" etc.
         candidate = re.sub(r'\s+(?:at|on|for|@|in)$', '', candidate, flags=re.IGNORECASE)
-        if candidate.lower() not in ("a slot", "slot", "at"):
+        if candidate.lower() not in ("a slot", "slot", "at") and not _looks_like_time(candidate):
             result["station"] = candidate
 
-    # 2. Fallback to general patterns if not yet found
+    # 2. Try implicit booking pattern: station_name + time (without "book" keyword)
+    if not result["station"]:
+        implicit_pattern = re.search(r'(\w[\w\s]*?)\s+(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)', text, re.IGNORECASE)
+        if implicit_pattern:
+            candidate = implicit_pattern.group(1).strip()
+            if len(candidate) > 2 and candidate.lower() not in ("a slot", "slot") and not _looks_like_time(candidate):
+                result["station"] = candidate
+
+    # 3. Fallback to general patterns if not yet found
     if not result["station"]:
         station_patterns = [
             r'book\s+(.+?)\s+(?:at|on|for|@)\s+\d',       # "book Central EV at 2pm"
@@ -148,11 +156,11 @@ def _extract_booking_intent(text: str) -> Dict[str, Optional[str]]:
                 candidate = m.group(1).strip().rstrip(',')
                 # Strip trailing filler words
                 candidate = re.sub(r'\s+(?:at|on|for|@|in|instead|now|please)$', '', candidate, flags=re.IGNORECASE)
-                if len(candidate) > 2 and candidate.lower() not in ("a slot", "slot"):
+                if len(candidate) > 2 and candidate.lower() not in ("a slot", "slot") and not _looks_like_time(candidate):
                     result["station"] = candidate
                     break
 
-    # 3. Extract battery % if mentioned
+    # 4. Extract battery % if mentioned
     bat = re.search(r'(\d{1,3})\s*%', text)
     if bat:
         result["battery"] = float(bat.group(1))
@@ -216,6 +224,57 @@ def _is_uuid(val: str) -> bool:
     except:
         return False
 
+
+def _looks_like_time(text: str) -> bool:
+    """
+    Check if a candidate station name is actually a time expression.
+    Helps prevent "book at 7pm" from extracting "7pm" as the station name.
+    """
+    if not text:
+        return False
+    text_lower = text.lower().strip()
+    # Check for common time patterns
+    time_patterns = [
+        r'^\d{1,2}(?::\d{2})?\s*(?:am|pm)?$',  # "2", "2pm", "14:00", "2:30pm"
+        r'^(?:am|pm)$',  # "am", "pm"
+        r'^\d{1,2}$',  # just a number
+    ]
+    for pat in time_patterns:
+        if re.match(pat, text_lower):
+            return True
+    # Also check if text contains only time keywords
+    if re.match(r'^(?:today|tomorrow|day after tomorrow|morning|afternoon|evening|night)$', text_lower):
+        return True
+    return False
+
+
+async def _detect_implicit_booking_intent(user_message: str, chat_history: List[Dict[str, str]]) -> bool:
+    """
+    Detect if user is implicitly trying to book based on:
+    - Message contains '+ time' pattern even without 'book' keyword
+    - User previously saw stations and now mentions one with a time
+    """
+    lower_msg = user_message.lower()
+    
+    # Pattern: "station_name at time" (even without 'book')
+    # e.g., "central station at 7pm", "green ev 2pm", etc.
+    # Look for: word/phrase + "at" + time
+    implicit_booking_patterns = [
+        r'(\w[\w\s]*)\s+(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)(?:\s|$)',  # "central station at 7pm"
+        r'^([^@][\w\s]+?)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))',  # "central 7pm"
+    ]
+    
+    for pat in implicit_booking_patterns:
+        m = re.search(pat, lower_msg, re.IGNORECASE)
+        if m:
+            potential_station = m.group(1).strip()
+            # Check if this looks like a station name (at least 2 chars, not just time)
+            if len(potential_station) > 2 and not _looks_like_time(potential_station):
+                print(f"[AGENT] 🎯 Implicit booking detected: '{potential_station}' + time")
+                return True
+    
+    return False
+
 async def _fuzzy_resolve_station(name: str) -> Optional[str]:
     """Helper to resolve a station name/typo to a canonical name or ID."""
     from .tools.charging import list_stations
@@ -274,7 +333,11 @@ async def process_agent_message(
     lower_msg = user_message.lower()
     is_vehicle_selected = bool(re.search(r'\[VEHICLE_SELECTED:', user_message))
     is_battery_msg = bool(re.search(r'\b\d{1,3}\s*%', user_message) or re.search(r'\bbattery\b.{0,20}\d', lower_msg))
-    is_booking_intent = any(w in lower_msg for w in ["book", "charge", "charging", "slot", "reserve"])
+    
+    # Check for explicit booking keywords OR implicit booking (station + time without "book")
+    has_explicit_booking_keyword = any(w in lower_msg for w in ["book", "charge", "charging", "slot", "reserve"])
+    has_implicit_booking_intent = await _detect_implicit_booking_intent(user_message, chat_history)
+    is_booking_intent = has_explicit_booking_keyword or has_implicit_booking_intent
 
     # Scan history for existing booking context
     # Rebuild messages list for context scanning
@@ -298,14 +361,32 @@ async def process_agent_message(
 
     booked_ctx = _build_booking_context_from_history(history_msgs)
 
-    # Try to build new booking context from current user message if booking intent or selection found
+    # Try to build new booking context from current user message
+    # Extract if explicitly booking OR implicitly booking (station + time)
     new_intent = _extract_booking_intent(user_message) if is_booking_intent else {}
+    
+    # If implicit booking detected but no extract yet, try extracting anyway
+    if not new_intent and has_implicit_booking_intent:
+        new_intent = _extract_booking_intent(user_message)
+        print(f"[AGENT] 🎯 Extracting implicit booking intent: {new_intent}")
     
     # Also extract vehicle selection from current message if present
     current_vs = re.search(
         r'\[VEHICLE_SELECTED:\s*vehicle_id=([^,]+),\s*connector_type=([^\]]+)\]',
         user_message
     )
+    
+    # Check if user is responding with a date after being asked to confirm
+    # Look for: "today", "tomorrow", "day after tomorrow", or a specific date
+    is_date_response = bool(re.search(r'\b(?:today|tomorrow|day after tomorrow)\b', lower_msg, re.IGNORECASE)) or _resolve_relative_date(user_message)
+    
+    # If user is confirming a date, extract it
+    if is_date_response and station and time_24h and not date_was_mentioned:
+        confirmed_date = _resolve_relative_date(user_message)
+        if confirmed_date:
+            date_iso = confirmed_date
+            date_was_mentioned = True
+            print(f"[AGENT] ✅ User confirmed date: {date_iso}")
     
     # Merge: latest intent wins for station/time/date to allow overrides
     station_raw = new_intent.get("station") or booked_ctx["station"]
@@ -319,7 +400,15 @@ async def process_agent_message(
             print(f"[AGENT] 🔍 Fuzzy resolved {station_raw!r} → {station!r}")
 
     time_24h = new_intent.get("time_24h") or booked_ctx["time_24h"]
-    date_iso = new_intent.get("date_iso") or booked_ctx["date_iso"] or today_iso
+    date_iso = new_intent.get("date_iso") or booked_ctx["date_iso"]
+    
+    # Track if date was NOT explicitly mentioned by user
+    date_was_mentioned = new_intent.get("date_iso") is not None or booked_ctx["date_iso"] is not None
+    
+    # Only use today as default if we proceed past the date confirmation check
+    if not date_iso:
+        date_iso = today_iso
+    
     vehicle_id = booked_ctx["vehicle_id"] or (current_vs.group(1).strip() if current_vs else None)
     connector_type = booked_ctx["connector_type"] or (current_vs.group(2).strip() if current_vs else None)
     battery = new_intent.get("battery") or booked_ctx["battery"]
@@ -340,6 +429,38 @@ async def process_agent_message(
     print(f"[AGENT] 🚗 vehicle_id={vehicle_id!r} connector={connector_type!r} battery={battery!r}")
 
     ui_component = None
+
+    # ── DATE CONFIRMATION: If booking intent with station+time but NO date mentioned ────
+    # Skip check if: user already responded with date, or is confirming ("yes"), or selecting vehicle
+    should_ask_for_date = (
+        is_booking_intent and 
+        station and 
+        time_24h and 
+        not date_was_mentioned and 
+        not is_vehicle_selected and
+        not is_date_response  # Skip if they already provided a date
+    )
+    
+    if should_ask_for_date:
+        print(f"[AGENT] 📅 Date not mentioned - asking user to confirm")
+        
+        tomorrow_iso = (date.today() + timedelta(days=1)).isoformat()
+        
+        reply = (
+            f"I'd like to book **{station}** at **{time_24h}**. "
+            f"Is this for **today** ({today_iso}) or would you like a different day?"
+        )
+        
+        # Store the booking context so far
+        ctx_cookie = (
+            f"\n[BOOKING_CONTEXT: station={station}|"
+            f"time={time_24h}|"
+            f"date=|"  # Empty - waiting for user confirmation
+            f"battery={battery if battery is not None else 'None'}]"
+        )
+        
+        print(f"{'='*60}\n")
+        return {"text": reply, "ui_component": None, "_ctx_cookie": ctx_cookie}
 
     # ── FAST PATH: Show vehicle card immediately on booking intent ────────────
     if is_booking_intent and not is_vehicle_selected and not vehicle_id and user_vehicles:
@@ -472,45 +593,62 @@ async def process_agent_message(
             s_lines.append(f"- {name} at {address}\n  Station ID: {sid}")
         stations_str = "\n\n".join(s_lines)
 
-    system_prompt = f"""You are the ChargeX EV Charging Assistant. Help users find and book EV charging stations.
+    system_prompt = f"""You are the ChargeX EV Charging Assistant. Help users with ANYTHING related to EV charging stations, bookings, vehicles, and slots. Be conversational and helpful.
 
-TOOLS:
-- tool_search_station_by_name: Search stations by name.
-- tool_geocode_location: Convert a city/landmark into coordinates.
-- tool_find_stations_nearby: Find stations near coordinates.
-- tool_create_booking_request: Book a charging slot.
+CONVERSATION MODES:
+1. **Station Queries**: User asks about stations (e.g., "stations near me", "show me available stations", "what stations are near central park")
+   - Use tool_geocode_location if needed to find coordinates
+   - Use tool_find_stations_nearby to find stations
+   - Show results naturally
 
-BOOKING RULES:
-1. MINIMIZE questions. Parse everything from the user's message first (station, time, date).
-2. Convert times to 24h format (e.g. "2pm" → "14:00").
-3. For relative dates: today={today_iso}, tomorrow={(date.today()+timedelta(days=1)).isoformat()}, day after tomorrow={(date.today()+timedelta(days=2)).isoformat()}.
-4. If user says "book X at 2pm today" — extract all of this without asking.
-5. If vehicle is not selected:
-   - Output ONLY: [VEHICLE_SELECTION_REQUIRED]
-   - Do NOT ask for battery first.
-6. If vehicle IS selected (a [VEHICLE_SELECTED] message is in history):
-   - Ask ONLY for battery % if missing.
-   - Then call tool_create_booking_request with all fields.
-7. NEVER ask the user to type a vehicle ID. NEVER expose UUIDs.
-8. NEVER ask more than one clarifying question at a time.
-9. When a booking is successfully finalized, do NOT output any conversational confirmation text (like "I have booked it for you"). The UI will handle the confirmation. Just trigger the tool and provide the data.
-10. NEVER "guess" or ask for a user's location if a station name is misspelled or unavailable. ALWAYS use tool_search_station_by_name or tool_find_stations_nearby to provide data-backed alternatives.
-11. If a booking fails, the tool will often return an 'alternative_slots' card. Ensure you summarize the availability from the tool's data rather than guessing.
+2. **Station Search**: User mentions a specific station (e.g., "tell me about Central Station", "info on Green EV")
+   - Use tool_search_station_by_name to find details
+   - Present information conversationally
 
-CONCURRENT CONTEXT (Determined from history):
-- Resolved Station: {station or "None"}
-- Resolved Vehicle ID: {vehicle_id or "None"}
-- Resolved Time: {time_24h or "None"}
-- Resolved Date: {date_iso or "None"}
-- Resolved Battery: {battery if battery is not None else "None"}%
+3. **Booking**: User requests a booking (explicit: "book", "charge", "reserve") OR implicit (e.g., "Central Station at 7pm")
+   - If date is NOT mentioned, the system will ask: "Is this for today or another day?"
+   - Once user confirms date, proceed to vehicle selection
+   - Handle vehicle selection via [VEHICLE_SELECTION_REQUIRED] sentinel
+   - Ask for battery % if missing
+   - Call tool_create_booking_request when ready
 
-TODAY: {today_iso}
+4. **General Info**: User asks about charging, EVs, availability, etc.
+   - Answer conversationally using your knowledge
+   - Offer to help with bookings or finding stations
 
-USER VEHICLES:
-{vehicles_str}
+TOOLS REFERENCE:
+- tool_search_station_by_name(name): Search stations by name
+- tool_geocode_location(location): Convert location/city to coordinates
+- tool_find_stations_nearby(lat, lon, limit): Find nearby stations
+- tool_create_booking_request(...): Book a charging slot
 
-CONTEXT STATIONS:
-{stations_str}
+BOOKING FLOW RULES:
+1. Only extract station/time/date from explicit or IMPLICIT booking intents
+2. If user provides station + time but NO date → System automatically asks which date (today/tomorrow/other)
+3. No vehicle selected → Output [VEHICLE_SELECTION_REQUIRED] sentinel
+4. Vehicle selected but no battery → Ask for current battery %
+5. All info available → Call booking tool directly
+6. Do NOT ask for confirmations about station already shown
+7. When user responds with a date (today/tomorrow/specific date), the system will extract it and proceed
+
+IMPORTANT BEHAVIOR CHANGES:
+- Be conversational and natural, don't follow rigid templates
+- For queries like "stations near me" or "show stations", use tools to provide data-driven results
+- When user says "station_name at time" after seeing stations, recognize as booking attempt immediately
+- IMPORTANT: If user says "book at 7pm" or "Central at 2pm" WITHOUT mentioning a date, ask which date (today/tomorrow/other)
+- Accept natural date responses: "today", "tomorrow", "day after tomorrow", or specific dates
+- Present alternatives naturally when slots conflict
+- NEVER expose internal IDs to users
+
+CONTEXT:
+- Today: {today_iso}
+- Station: {station or "Not set"}
+- Vehicle: {vehicle_id or "Not selected"}
+- Time: {time_24h or "Not specified"}
+- Date: {date_iso or "Not specified"}
+- Battery: {battery if battery is not None else "Not specified"}
+
+User Vehicles: {len(user_vehicles)} registered
 """
 
     messages = [SystemMessage(content=system_prompt)]
@@ -523,7 +661,7 @@ CONTEXT STATIONS:
 
     messages.append(HumanMessage(content=user_message))
 
-    print(f"[AGENT] 🤖 Falling through to LLM...")
+    print(f"[AGENT] 🤖 LLM Mode: General conversation with tools...")
 
     max_iterations = 6
 

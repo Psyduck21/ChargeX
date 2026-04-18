@@ -8,6 +8,7 @@ from ...models.booking_model import BookingCreate
 from ...database import get_supabase_client
 from datetime import datetime, timedelta
 import uuid
+import difflib
 
 # Injected by the orchestrator before each agent loop — allows the tool
 # to write the authenticated user's ID into the booking without the LLM
@@ -150,9 +151,13 @@ async def find_time_alternatives(station_id: str, req_date: str, req_time: str, 
         base_time_str = f"{req_date}T{req_time}:00"
         base_time = datetime.fromisoformat(base_time_str)
         
-        # Check next 4 slots (+30m, +1h, +1.5h, +2h)
+        # Start from the end of the requested booking duration, not from the requested time
+        # For a 1-hour booking at 7pm, start suggesting from 8pm onwards
+        start_time = base_time + timedelta(minutes=duration)
+        
+        # Check next 4 slots (+30m, +1h, +1.5h, +2h) from the end of the booking
         for i in range(1, 5):
-            next_time = base_time + timedelta(minutes=30 * i)
+            next_time = start_time + timedelta(minutes=30 * (i - 1))  # Start from end time, then +30m, +1h, etc.
             test_date = next_time.strftime("%Y-%m-%d")
             test_time = next_time.strftime("%H:%M")
             
@@ -349,6 +354,34 @@ async def tool_create_booking_request(
         # Enrich the result for frontend UI
         result["station_name"] = station_name_resolved
         result["connector_type"] = matched_connector_type
+        
+        # Format times for frontend display
+        if isinstance(result.get("start_time"), datetime):
+            start_dt_obj = result["start_time"]
+            end_dt_obj = result["end_time"]
+            
+            # Extract time strings (HH:MM format)
+            start_time_str = start_dt_obj.strftime("%H:%M")  # e.g., "20:00"
+            end_time_str = end_dt_obj.strftime("%H:%M")      # e.g., "21:00"
+            
+            # Calculate duration in minutes
+            duration_minutes = int((end_dt_obj - start_dt_obj).total_seconds() / 60)
+            duration_hours = duration_minutes // 60
+            duration_mins = duration_minutes % 60
+            
+            if duration_hours > 0 and duration_mins > 0:
+                duration_display = f"{duration_hours}h {duration_mins}m"
+            elif duration_hours > 0:
+                duration_display = f"{duration_hours}h"
+            else:
+                duration_display = f"{duration_minutes}m"
+            
+            # Add formatted times to result
+            result["booking_time_start"] = start_time_str
+            result["booking_time_end"] = end_time_str
+            result["booking_duration"] = duration_display
+            result["booking_date"] = start_dt_obj.strftime("%Y-%m-%d")
+            result["booking_datetime_display"] = f"{start_dt_obj.strftime('%Y-%m-%d')} {start_time_str}-{end_time_str} ({duration_display})"
         
         print(f"[TOOL:create_booking_request] ✅ Booking created: {result}")
         return result
